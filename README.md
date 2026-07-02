@@ -101,6 +101,40 @@ Interactive portfolio analytics — net-worth trend with selectable granularity 
 |---|---|
 | ![home](docs/screenshots/home.png) | ![money](docs/screenshots/money.png) |
 
+## 🧬 Self-evolution — it gets better while you sleep
+
+Jarvis runs a **dual-track nightly evolution pipeline** over the day's full conversation log:
+
+**Track 1 · Personality (`self_reflect`, 03:00)**
+Reads every exchange of the day and distills concise *interaction rules* — how you like answers delivered, what annoys you, what you care about. Rules are deduplicated, capped, written into the agent's SOUL, and **injected into every turn from the next morning on**. The assistant literally wakes up knowing how to treat you better.
+
+**Track 2 · Capability (`self_review`, 03:15)**
+Audits the same log for capability gaps — questions it couldn't answer, tasks it couldn't do, moments you had to repeat yourself. It converts each gap into an engineering proposal, **autonomously builds the highest-value one overnight**, and reports the rest to your Telegram for one-tap approval.
+
+**The safety architecture that makes autonomy trustworthy:**
+1. Snapshot backups of every critical file before any self-modification
+2. Full-stack build by an embedded coding agent (backend + voice tool + dashboard panel)
+3. Smoke tests on everything it touched (Python AST · YAML · HTML integrity)
+4. Automatic rollback on failure — plus a **self-repair loop** that feeds the exact error back for another attempt
+5. Auto-redeploy on success: the new capability is live before you wake up
+
+Both tracks use cursor-based incremental processing — every conversation is reviewed exactly once, across voice and Telegram alike.
+
+## 🧠 Memory — remembers like a person, retrieves like a database
+
+Memory is engineered in layers, so knowing you never depends on a model "remembering to remember":
+
+- **Canonical fact store** — every durable fact lives in one embedded store, the single source of truth shared by all channels
+- **Always-injected profile** — core facts about you ride along in *every single turn's* context; who you are is never left to retrieval luck
+- **Hybrid recall** — keyword matching (Chinese-optimized sliding window) fused with local semantic embeddings for everything beyond the core
+- **Deterministic scribe** — an independent watcher scans the conversation log every few minutes and extracts durable facts under a strict *"under-record rather than hallucinate"* policy — capture never depends on the model calling a tool
+- **Self-learned SOUL** — personality plus the interaction rules learned by nightly reflection, versioned and editable
+- **Two-way profile sync** — the agent's own user profile and the fact store reconcile bidirectionally, with snapshot-based deletion protection (a deleted memory can never resurrect) and a semantic-similarity gate that blocks paraphrased duplicates
+- **Time-aware memories** — event-bound facts carry expiry dates and self-purge once obsolete
+- **Per-person memory** — the robot keeps separate profiles for people it meets by voiceprint, with automatic privacy masking for anyone who isn't you
+- **Live editing** — every memory is visible and editable in the dashboard, with changes reflected in the very next turn
+- **100% local** — embeddings are computed on-device; your memory never leaves your machine
+
 ## Correctness engineering
 
 - **Deterministic answer layer** — high-frequency money questions are answered by Python computation that produces the *complete sentence*; the model recites it verbatim
