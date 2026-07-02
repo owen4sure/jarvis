@@ -44,6 +44,28 @@ launchctl kickstart -k gui/$(id -u)/ai.hermes.gateway
 3. **面板**:`brain/dashboard/index.html` 加一個 panel(跟著現有的 CSS 變數風格),`brain/dashboard/hermes_dashboard.py` 加 `/api` 代理
 4. **確定性答案**(選配):高頻問題加進 `_focused_finance_answer` 樣式的分支——程式算好完整句子,模型照唸,正確率 100%
 
+## 方式四:攔在 agent 之前(plugin hook)/ Intercept before the agent (plugin hook)
+
+想在訊息**進 agent 迴圈之前**就處理掉某類訊息(例如純「品項+金額」秒記帳),用 hermes-agent 官方的 **`pre_gateway_dispatch`** hook,而**不要**去改 hermes-agent 的原始碼——改原始碼下次 `hermes update` 會被覆蓋或衝突。
+
+Want to handle a class of messages **before the agent loop** (e.g. instant expense logging)? Use hermes-agent's official **`pre_gateway_dispatch`** plugin hook — never edit hermes-agent source, or the next `hermes update` will clobber it.
+
+參考實作 / reference implementation:**[`plugins/expense-fastpath/`](../plugins/expense-fastpath/)** — 純「午餐138」訊息 <1 秒記完並回覆,其餘照走 agent。它示範了正確的 gate:先用 gateway 自己的 `_is_user_authorized` 擋非本人(不繞過授權)、有附圖就放行(不吞照片)、有 pending clarify 就不攔(不吃掉回答)。
+
+```python
+# ~/.hermes/plugins/<name>/__init__.py
+def _hook(event=None, gateway=None, **_):
+    if not gateway._is_user_authorized(event.source):   # 授權 gate
+        return None                                     # 非本人 → 照走原流程
+    ...                                                 # 你的判斷
+    return {"action": "skip", "reason": "handled"}      # 攔下 / 或 return None 放行
+
+def register(ctx):
+    ctx.register_hook("pre_gateway_dispatch", _hook)
+```
+
+在 `~/.hermes/config.yaml` 的 `plugins.enabled` 加上你的 plugin 名字即可 / add its name to `plugins.enabled` in `~/.hermes/config.yaml`.
+
 ## 加主動行為 / Add proactive behaviors
 
 `brain/scripts/proactive_engine.py` — 寫一個 checker 函式加進 `CHECKERS`,回傳要推播的訊息即可(引擎管去重、安靜時段、頻率上限):
