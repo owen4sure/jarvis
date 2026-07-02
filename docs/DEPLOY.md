@@ -72,7 +72,7 @@ curl "http://127.0.0.1:8809/finance_summary?q=今天花多少"
 open http://localhost:8811                 # JARVIS HUD
 ```
 
-## 常見坑
+## 部署提示
 
 - **macOS 沒有 `timeout` 指令**:腳本已避免,自己 debug 時注意
 - **Whisper 首次啟動會從 HuggingFace 拉 1.5GB 模型**:之後 launchd 已設 `HF_HUB_OFFLINE=1` 用快取
