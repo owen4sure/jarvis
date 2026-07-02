@@ -42,7 +42,8 @@ Three engineering principles make that possible:
 | 💰 **Personal finance** | Full income/expense/budget tracking · real-time TW & US portfolio (returns, daily P&L, per-holding) · net-worth trend (daily/weekly/monthly) · goal-gap and compound-interest projections · per-category analytics · voice bookkeeping with a deterministic capture net |
 | 🗣️ **Voice companion** | Wake-word ("Jarvis"), continuous conversation, interruption · local Whisper ASR on Apple Metal (~1s, Traditional Chinese) · voiceprint owner recognition · facial expressions & head motion synced to emotion |
 | 🧠 **Memory** | Hybrid vector + keyword retrieval · deterministic fact extraction from every conversation · profile always injected into context · dashboard editing with instant sync |
-| 📬 **Communications** | Telegram two-way chat · email drafting with contact lookup and human-confirmed sending · proactive notifications (payday, budget pace, market moves) |
+| 📱 **Telegram** | Full-capability chat (same brain as voice) · morning briefing · TW/US market-close P&L reports · intraday holding alerts · budget-pace & payday pushes · stock/crypto/earthquake/typhoon/flight watchers · remote task dispatch & build approvals |
+| 📬 **Email** | Drafting with contact lookup · professional tone templates · human-confirmed sending · outbox with inline editing on the dashboard |
 | 🛠️ **Self-extension** | One sentence → full-stack feature (backend API + voice tool + dashboard panel), auto-deployed behind safety gates · nightly capability proposals |
 | 🖥️ **Command center** | Iron-Man HUD · finance & portfolio visualizations (multi-ring allocation charts, interactive trends) · memory/chat/evolution/mail consoles · service health & model switching |
 | 🔒 **Privacy** | Voiceprint-gated identity · automatic financial masking for guests · everything runs on your own machine |
@@ -90,6 +91,16 @@ The physical presence is a [StackChan](https://github.com/meganetaaan/stack-chan
 - **Voiceprint identity** at the ASR layer: the robot knows *who* is speaking; guests are automatically privacy-masked
 - **Embodied emotion**: the LLM picks an emotion each turn; face and head motion follow
 - **Proactive voice**: reminders and alerts make the robot speak up on its own via a server-side voice queue
+
+### 📱 The pocket: Telegram integration
+
+When you leave the house, Jarvis doesn't hand you off to a dumber sibling — **Telegram is served by the exact same agent process**, with the full toolset and the full memory. It is the away-from-home body:
+
+- **Everything by chat** — finance queries, bookkeeping, reminders, todos, memory, email drafting, web research, computed analytics: identical capabilities to voice, because it *is* the same brain
+- **Proactive intelligence, pushed** — morning briefing at 07:30 · full P&L reports after every TW & US market close · intraday alerts on significant moves in your holdings · budget-pace warnings before you overspend · payday investment reminders
+- **Watchers** — subscribe to stocks, crypto, earthquakes, typhoons, flights and late-night check-ins; Jarvis messages you the moment something matters
+- **Mission control on the go** — dispatch long-running research tasks and get results delivered when done · receive "feature built & deployed" reports · approve the nightly capability proposals with a reply
+- **Perfect continuity** — mention something on Telegram at lunch, and the robot on your desk already knows it when you get home
 
 ## The command center
 
