@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS // 控制核心</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#04070e; --glass:rgba(13,22,38,.55); --glass2:rgba(18,30,52,.65); --line:rgba(58,123,213,.22); --line2:rgba(0,229,255,.34);
+  --cy:#00e5ff; --cy-d:#0091a8; --blue:#3a7bd5; --vio:#8b5cff; --ok:#00ffa3; --warn:#ffb02e; --bad:#ff4d6d; --gold:#ffcf5c;
+  --txt:#dbeafe; --dim:#7d93b3; --dimer:#46618a;
+  --mono:'JetBrains Mono',ui-monospace,monospace; --head:'Orbitron',sans-serif;
+  --ui:'Rajdhani','PingFang TC','Microsoft JhengHei',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font-family:var(--ui);font-size:15.5px;overflow:hidden;letter-spacing:.3px}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:rgba(0,229,255,.25);border-radius:4px}
+.bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(58,123,213,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(58,123,213,.06) 1px,transparent 1px);
+  background-size:46px 46px;mask-image:radial-gradient(ellipse 80% 70% at 50% 38%,#000 40%,transparent 100%)}
+.bg-glow{position:fixed;z-index:0;border-radius:50%;filter:blur(95px);opacity:.45;pointer-events:none}
+.bg-glow.a{width:520px;height:520px;background:radial-gradient(circle,#0a4a6e,transparent 70%);top:-160px;left:-120px;animation:f1 22s ease-in-out infinite}
+.bg-glow.b{width:480px;height:480px;background:radial-gradient(circle,#3a1d7a,transparent 70%);bottom:-180px;right:-120px;animation:f2 26s ease-in-out infinite}
+@keyframes f1{50%{transform:translate(80px,60px) scale(1.15)}}@keyframes f2{50%{transform:translate(-70px,-50px) scale(1.1)}}
+#bgfx{position:fixed;inset:0;z-index:0;pointer-events:none}
+.scan{position:fixed;left:0;right:0;height:130px;z-index:1;pointer-events:none;background:linear-gradient(180deg,transparent,rgba(0,229,255,.045),transparent);animation:scan 8s linear infinite}
+@keyframes scan{0%{top:-130px}100%{top:100%}}
+.app{position:relative;z-index:2;display:grid;grid-template-columns:96px 1fr;grid-template-rows:62px 1fr;height:100vh}
+/* header */
+header{grid-column:1/3;display:flex;align-items:center;gap:20px;padding:0 26px;background:linear-gradient(90deg,rgba(8,14,26,.92),rgba(8,14,26,.55));border-bottom:1px solid var(--line);backdrop-filter:blur(12px)}
+.brand{display:flex;align-items:center;gap:12px}
+.coredot{width:11px;height:11px;border-radius:50%;background:var(--cy);box-shadow:0 0 14px var(--cy);animation:beat 1.8s ease-in-out infinite}
+@keyframes beat{50%{opacity:.4;transform:scale(.8)}}
+.brand .mk{font-family:var(--head);font-weight:900;font-size:21px;letter-spacing:5px;background:linear-gradient(90deg,#fff,var(--cy));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 22px rgba(0,229,255,.4)}
+.brand .sub{font-family:var(--mono);font-size:9px;color:var(--cy-d);letter-spacing:2px;margin-top:-2px}
+.hsep{width:1px;height:30px;background:var(--line)}
+#hstatus{font-size:14px;color:var(--dim)}
+.spacer{flex:1}
+.hpill{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dim);background:var(--glass2);border:1px solid var(--line);padding:6px 14px;border-radius:20px;transition:.3s}
+.hpill b{color:var(--cy);font-family:var(--mono);font-size:12px}
+.clock{font-family:var(--head);font-size:19px;font-weight:700;color:#eaf6ff;letter-spacing:2px;text-shadow:0 0 16px rgba(0,229,255,.35)}
+/* nav */
+nav{display:flex;flex-direction:column;align-items:center;gap:5px;padding:16px 0;background:linear-gradient(180deg,rgba(8,14,26,.75),rgba(8,14,26,.3));border-right:1px solid var(--line)}
+.nav-i{width:66px;height:60px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;color:var(--dim);position:relative;transition:.18s;border:1px solid transparent}
+.nav-i .ic{font-size:20px}
+.nav-i .lb{font-size:11px;font-weight:600}
+.nav-i:hover{color:var(--txt);background:rgba(0,229,255,.06);border-color:var(--line)}
+.nav-i.on{color:var(--cy);background:rgba(0,229,255,.1);border-color:var(--line2);box-shadow:0 0 18px rgba(0,229,255,.13),inset 0 0 16px rgba(0,229,255,.05)}
+.nav-i.on::before{content:'';position:absolute;left:-1px;top:14px;bottom:14px;width:2px;background:var(--cy);box-shadow:0 0 9px var(--cy);border-radius:2px}
+.nav-i .badge{position:absolute;top:7px;right:11px;background:var(--warn);color:#1a1208;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 4px}
+.nav-i .badge.show{display:flex}
+/* main */
+main{overflow-y:auto;padding:26px 34px 40px;max-width:1180px}
+.page{display:none;animation:rise .4s cubic-bezier(.2,.7,.3,1)}
+.page.on{display:block}
+@keyframes rise{from{opacity:0;transform:translateY(13px)}to{opacity:1;transform:none}}
+.ph{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px}
+.ph h2{font-family:var(--head);font-size:19px;font-weight:700;letter-spacing:2px;color:#eaf6ff}
+.ph .desc{font-size:13px;color:var(--dim);margin-top:5px}
+.panel{position:relative;background:var(--glass);border:1px solid var(--line);border-radius:15px;padding:20px;backdrop-filter:blur(14px);margin-bottom:18px}
+.panel::before,.panel::after{content:'';position:absolute;width:13px;height:13px;border:2px solid var(--line2);pointer-events:none}
+.panel::before{top:-1px;left:-1px;border-right:0;border-bottom:0;border-radius:6px 0 0 0}
+.panel::after{bottom:-1px;right:-1px;border-left:0;border-top:0;border-radius:0 0 6px 0}
+.panel h3{font-size:15px;font-weight:700;color:var(--cy);margin-bottom:15px;display:flex;align-items:center;gap:9px}
+.panel h3 .ic{font-size:17px}
+.grid{display:grid;gap:15px}.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:1050px){.g4{grid-template-columns:repeat(2,1fr)}}
+.pod{position:relative;background:var(--glass2);border:1px solid var(--line);border-radius:14px;padding:17px 19px;overflow:hidden;transition:.25s}
+.pod:hover{border-color:var(--line2);box-shadow:0 0 22px rgba(0,229,255,.1)}
+.pod .ic{font-size:16px;opacity:.85;float:right}
+.pod .n{font-family:var(--head);font-size:31px;font-weight:700;color:#eaf6ff;line-height:1;margin-top:4px;text-shadow:0 0 16px rgba(0,229,255,.28)}
+.pod .l{font-size:13px;color:var(--dim);margin-top:7px}
+.pod::after{content:'';position:absolute;top:0;right:0;width:55px;height:55px;background:radial-gradient(circle at top right,rgba(0,229,255,.12),transparent 70%)}
+/* home core */
+.cmd{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:stretch;margin-bottom:18px}
+@media(max-width:900px){.cmd{grid-template-columns:1fr}}
+.core-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center}
+.core{position:relative;width:230px;height:230px}
+.core svg{position:absolute;inset:0}
+.core .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.core .mid .big{font-family:var(--head);font-size:18px;font-weight:900;color:#eaf6ff;text-shadow:0 0 22px rgba(0,229,255,.5);text-align:center;line-height:1.3}
+.core .mid .small{font-size:13px;color:var(--cy);margin-top:6px}
+.rot{transform-origin:115px 115px;animation:spin 16s linear infinite}.rot.r{animation:spin 22s linear infinite reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+.item{display:flex;align-items:center;gap:13px;padding:12px 15px;border:1px solid var(--line);border-radius:11px;margin-bottom:9px;background:var(--glass2);transition:.15s}
+.item:hover{border-color:var(--line2)}
+.item .txt{flex:1;outline:none}
+/* 持股卡片 */
+.hcard{border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin-bottom:11px;background:var(--glass2);transition:.18s}
+.hcard:hover{border-color:var(--line2);box-shadow:0 0 20px rgba(0,229,255,.08)}
+.hcard .nm{font-size:16px;font-weight:700;color:#eaf6ff}
+.hcard .sym{font-size:11px;color:var(--dim);font-family:var(--mono);margin-top:2px;letter-spacing:.5px}
+.hcard .price{font-family:var(--mono);font-size:21px;font-weight:700;color:#eaf6ff;line-height:1}
+.hcard .today{font-size:12px;margin-top:3px;font-family:var(--mono)}
+.hstat{background:rgba(255,255,255,.025);border-radius:9px;padding:8px 10px;text-align:center}
+.hstat .l{font-size:11px;color:var(--dim);margin-bottom:3px}
+.hstat .v{font-family:var(--mono);font-weight:700;font-size:15px;color:#eaf6ff}
+.hedit{display:flex;align-items:center;gap:7px;margin-top:11px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--dim);flex-wrap:wrap}
+.hedit .e{outline:none;font-family:var(--mono);font-weight:600;color:var(--gold);border-bottom:1px dashed var(--line2);padding:0 4px;min-width:28px;display:inline-block}
+.hedit input,.hedit select{background:var(--glass2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:2px 5px;font-size:12px;font-family:var(--mono)}
+/* 證券平台式持股表格（紅漲綠跌） */
+.ptwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+.ptbl{display:grid;grid-template-columns:1.8fr .8fr .95fr 1fr .9fr 1.15fr 1.15fr 34px;min-width:680px}
+.ptbl .ph2{padding:9px 11px;background:rgba(255,255,255,.05);color:var(--dim);font-size:11px;font-weight:700;letter-spacing:.5px;display:flex;align-items:center}
+.ptbl .ph2.r{justify-content:flex-end}
+.ptbl .grp{grid-column:1/-1;padding:7px 12px;background:rgba(0,229,255,.07);color:var(--cy);font-size:12px;font-weight:700;letter-spacing:1.5px;border-top:1px solid var(--line)}
+.ptbl .cell{padding:11px;border-top:1px solid rgba(255,255,255,.05);display:flex;align-items:center;font-family:var(--mono);font-size:13.5px}
+.ptbl .cell.r{justify-content:flex-end}
+.ptbl .cell.nm{flex-direction:column;align-items:flex-start;gap:1px;font-family:var(--ui)}
+.ptbl .cell.nm b{font-size:14px;color:#eaf6ff;font-weight:600}
+.ptbl .cell.nm small{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.ptbl .px{font-size:15px;font-weight:700}
+.ptbl .e2{outline:none;border-bottom:1px dashed var(--line2);min-width:30px;text-align:right;color:var(--gold)}
+.ptbl .dl{grid-column:1/-1;height:0}
+.ptbl .cell.del{padding:0;justify-content:center;cursor:pointer;color:var(--dimer);font-size:15px}
+.ptbl .cell.del:hover{color:var(--bad)}
+/* 記帳分析 HUD */
+.qbtn{background:linear-gradient(135deg,rgba(0,229,255,.1),rgba(0,229,255,.03));border:1px solid var(--line2);color:var(--txt);border-radius:10px;padding:9px 14px;font-size:13px;cursor:pointer;font-family:var(--ui);transition:.15s}
+.qbtn:hover{background:rgba(0,229,255,.18);box-shadow:0 0 14px rgba(0,229,255,.25);transform:translateY(-1px)}
+.qbtn b{color:var(--gold);font-family:var(--mono);margin-left:3px}
+#fin-quick input,.qe input{background:var(--glass2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--txt);font-size:13px;font-family:var(--mono)}
+#fin-quick input:focus{outline:none;border-color:var(--line2);box-shadow:0 0 10px rgba(0,229,255,.15)}
+.donutlg{display:flex;align-items:center;gap:7px;font-size:12.5px;padding:3px 0}
+.donutlg .dot{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+.hudbar{height:10px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.hudbar>div{height:100%;border-radius:6px;transition:width .6s}
+.mbar{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1}
+.mbar .bar{width:60%;max-width:34px;background:linear-gradient(180deg,var(--cy),rgba(0,229,255,.25));border-radius:5px 5px 0 0;box-shadow:0 0 10px rgba(0,229,255,.3);transition:.5s}
+.mbar .bl{font-size:10px;color:var(--dim);font-family:var(--mono)}
+.mbar .bv{font-size:10px;color:var(--cy);font-family:var(--mono)}
+.insight{display:flex;gap:9px;align-items:flex-start;padding:10px 13px;background:rgba(0,229,255,.045);border:1px solid var(--line);border-left:2px solid var(--cy);border-radius:9px;margin-bottom:8px;font-size:13px;line-height:1.5}
+#mem-text{width:100%;min-height:440px;background:rgba(8,14,26,.6);border:1px solid var(--line);border-radius:11px;padding:16px 18px;color:var(--txt);font-family:var(--mono);font-size:14px;line-height:2;resize:vertical;outline:none;letter-spacing:.3px}
+#mem-text:focus{border-color:var(--line2);box-shadow:0 0 16px rgba(0,229,255,.12)}
+#mem-text::placeholder{color:var(--dimer)}
+.item .txt[contenteditable]:focus{box-shadow:0 0 0 1px var(--cy);border-radius:6px;padding:2px 6px}
+.tag{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600}
+.tag.ok{background:rgba(0,255,163,.12);color:var(--ok);border:1px solid rgba(0,255,163,.3)}
+.tag.no{background:rgba(255,176,46,.12);color:var(--warn);border:1px solid rgba(255,176,46,.3)}
+.pill{display:inline-flex;align-items:center;gap:8px;font-size:14px;padding:9px 15px;border-radius:11px;background:var(--glass2);border:1px solid var(--line);margin:0 9px 9px 0;transition:.2s}
+.pill:hover{border-color:var(--line2);color:var(--cy)}
+.pill .d{width:6px;height:6px;border-radius:50%}
+.btn{font-family:var(--ui);font-weight:700;font-size:14px;border:1px solid var(--line2);color:var(--cy);background:rgba(0,229,255,.08);padding:9px 18px;border-radius:10px;cursor:pointer;transition:.2s}
+.btn:hover{background:rgba(0,229,255,.18);box-shadow:0 0 16px rgba(0,229,255,.22)}
+.btn.solid{background:linear-gradient(90deg,var(--cy-d),var(--blue));color:#021018;border-color:transparent}
+.btn.solid:hover{filter:brightness(1.13)}
+.btn.sm{padding:6px 12px;font-size:12.5px}
+.btn.danger{color:var(--bad);border-color:rgba(255,77,109,.35);background:rgba(255,77,109,.06)}
+.btn.danger:hover{background:rgba(255,77,109,.16)}
+input.add{flex:1;background:rgba(8,14,26,.7);border:1px solid var(--line);color:var(--txt);padding:11px 15px;border-radius:10px;outline:none;font-size:15px;font-family:var(--ui)}
+input.add:focus{border-color:var(--cy);box-shadow:0 0 0 1px var(--cy)}
+.addrow{display:flex;gap:10px;margin-top:13px}
+.empty{color:var(--dimer);text-align:center;padding:30px;font-size:14px}
+.msg{padding:12px 16px;border-radius:12px;background:var(--glass2);border-left:3px solid var(--blue);margin-bottom:11px}
+.msg .t{font-size:11px;color:var(--dimer);margin-bottom:5px;font-family:var(--mono)}
+.msg .u{color:var(--cy);font-weight:600}.msg .a{margin-top:5px;line-height:1.55}
+.livebox{position:relative;display:inline-block;max-width:100%;border-radius:15px;overflow:hidden;border:1px solid var(--line2)}
+.livebox img{display:block;max-width:100%;min-height:300px;background:#020509}
+.livebox .cn::before,.livebox .cn::after{content:'';position:absolute;width:20px;height:20px;border:2px solid var(--cy);z-index:2}
+.livebox .cn::before{top:9px;left:9px;border-right:0;border-bottom:0}.livebox .cn::after{bottom:9px;right:9px;border-left:0;border-top:0}
+.live-badge{position:absolute;top:13px;left:13px;display:flex;align-items:center;gap:7px;background:rgba(255,77,109,.85);color:#fff;padding:5px 13px;border-radius:20px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;z-index:3}
+.live-badge .d{width:8px;height:8px;border-radius:50%;background:#fff;animation:beat 1s infinite}
+.svc{display:flex;align-items:center;gap:12px;padding:12px 15px;border:1px solid var(--line);border-radius:11px;margin-bottom:9px;background:var(--glass2)}
+.svc .d{width:9px;height:9px;border-radius:50%}
+.svc .d.up{background:var(--ok);box-shadow:0 0 8px var(--ok)}.svc .d.down{background:var(--bad);box-shadow:0 0 8px var(--bad)}
+.svc .nm{flex:1}.svc .st{font-family:var(--mono);font-size:13px}
+.model-card{cursor:pointer;border:1px solid var(--line);border-radius:13px;padding:15px 17px;background:var(--glass2);transition:.2s}
+.model-card:hover{border-color:var(--line2)}
+.model-card.on{border-color:var(--cy);background:rgba(0,229,255,.1);box-shadow:0 0 16px rgba(0,229,255,.12)}
+.toast{position:fixed;bottom:26px;right:26px;background:linear-gradient(90deg,rgba(0,229,255,.95),rgba(58,123,213,.95));color:#021018;padding:13px 22px;border-radius:12px;font-weight:700;opacity:0;transform:translateY(12px);transition:.3s;z-index:99;box-shadow:0 8px 30px rgba(0,229,255,.3)}
+.toast.show{opacity:1;transform:none}
+#approvals{position:fixed;top:74px;right:24px;width:390px;max-width:90vw;z-index:80;display:flex;flex-direction:column;gap:11px}
+/* 首頁系統概況（條列式，清楚不重複）*/
+.ovr{display:flex;justify-content:space-between;align-items:center;padding:14px 4px;border-bottom:1px solid var(--line)}
+.ovr:last-child{border-bottom:none}
+.ovr .k{font-size:14px;color:var(--dim);display:flex;align-items:center;gap:9px}
+.ovr .v{font-family:var(--head);font-size:17px;font-weight:700;color:#eaf6ff}
+.ovr .v.click{cursor:pointer;color:var(--cy)}
+/* 後台服務晶片格（2欄）*/
+.svcg{display:grid;grid-template-columns:repeat(2,1fr);gap:11px}
+@media(max-width:680px){.svcg{grid-template-columns:1fr}}
+.svcc{display:flex;align-items:center;gap:11px;padding:14px 16px;background:var(--glass2);border:1px solid var(--line);border-radius:12px;transition:.2s}
+.svcc:hover{border-color:var(--line2);transform:translateY(-1px)}
+.svcc .sdot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.svcc .sdot.up{background:var(--ok);box-shadow:0 0 9px var(--ok)}
+.svcc .sdot.down{background:var(--bad);box-shadow:0 0 9px var(--bad)}
+.svcc .snm{flex:1;font-size:14px;color:#dceaff}
+.svcc .sst{font-size:12px;font-weight:700}
+/* ============ JARVIS 鋼鐵人 HUD 首頁 ============ */
+.hud{position:relative;display:grid;grid-template-columns:280px 1fr 280px;gap:16px;align-items:center;min-height:560px;padding:6px}
+@media(max-width:1080px){.hud{grid-template-columns:1fr;min-height:auto}}
+.hud-col{display:flex;flex-direction:column;gap:16px;z-index:3}
+.hud-center{position:relative;display:flex;align-items:center;justify-content:center;min-height:560px;z-index:2}
+@media(max-width:1080px){.hud-center{min-height:380px;order:-1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes spinr{to{transform:rotate(-360deg)}}
+@keyframes hpulse{0%,100%{opacity:.35}50%{opacity:.9}}
+@keyframes eyeflick{0%,100%{opacity:1}48%{opacity:1}49%{opacity:.5}50%{opacity:1}92%{opacity:1}93%{opacity:.35}94%{opacity:1}}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes glowpulse{0%,100%{filter:drop-shadow(0 0 6px rgba(0,229,255,.5))}50%{filter:drop-shadow(0 0 16px rgba(0,229,255,.9))}}
+.rings{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:1}
+.rings svg{position:absolute;opacity:.9}
+.helmet-wrap{position:relative;z-index:2;animation:floaty 6s ease-in-out infinite}
+.helmet{width:340px;height:auto;filter:drop-shadow(0 0 22px rgba(0,229,255,.45))}
+.hud-center::before{content:'';position:absolute;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(0,229,255,.14),transparent 68%);z-index:1;animation:hpulse 4s ease-in-out infinite}
+.helmet .eye{fill:var(--cy);animation:eyeflick 5s infinite;filter:drop-shadow(0 0 7px var(--cy))}
+.hud-status{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);text-align:center;z-index:4}
+.hud-status .hs1{font-family:var(--head);font-size:30px;font-weight:900;letter-spacing:5px;color:var(--cy);text-shadow:0 0 18px rgba(0,229,255,.6)}
+.hud-status .hs2{font-family:var(--mono);font-size:12px;letter-spacing:3px;color:var(--ok);margin-top:2px}
+/* HUD 小工具卡（斜切角科技框）*/
+.hw{position:relative;background:linear-gradient(135deg,rgba(0,46,66,.4),rgba(8,16,30,.55));border:1px solid var(--line2);padding:14px 16px;backdrop-filter:blur(6px);clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));box-shadow:0 0 22px rgba(0,229,255,.07) inset}
+.hw .ht{font-size:10.5px;letter-spacing:2.5px;color:var(--cy);text-transform:uppercase;font-family:var(--mono);opacity:.9}
+.hw .hb{font-family:var(--head);font-weight:800;color:#eaf6ff;text-shadow:0 0 12px rgba(0,229,255,.4);line-height:1}
+.hw.click{cursor:pointer;transition:.2s}.hw.click:hover{border-color:var(--cy);box-shadow:0 0 22px rgba(0,229,255,.18) inset}
+.gwrap{display:flex;align-items:center;gap:13px}
+.gauge{position:relative;width:78px;height:78px;flex:0 0 auto}
+.gauge .gtxt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gauge .gn{font-family:var(--head);font-size:18px;font-weight:800;color:#eaf6ff}
+.hud-svcbar{margin-top:6px}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div><div class="bg-glow a"></div><div class="bg-glow b"></div><canvas id="bgfx"></canvas><div class="scan"></div>
+<div class="app">
+  <header>
+    <div class="brand"><span class="coredot"></span><div><div class="mk">JARVIS</div><div class="sub">AI 助理控制核心</div></div></div>
+    <div class="hsep"></div><span class="status-dot"></span><span id="hstatus">連線中…</span>
+    <div class="spacer"></div>
+    <div class="hpill" id="hlink">💬 待命中</div>
+    <div class="hpill" id="model-pill" onclick="toggleModelMenu(event)" style="cursor:pointer" title="點我切換模型">🧠 模型 <b id="hmodel">—</b> <span style="font-size:9px;color:var(--dim)">▾</span></div>
+    <div id="model-menu" style="display:none;position:fixed;z-index:60;background:var(--glass);border:1px solid var(--line2);border-radius:12px;padding:7px;backdrop-filter:blur(16px);box-shadow:0 10px 36px rgba(0,0,0,.5);min-width:248px"></div>
+    <div class="hsep"></div>
+    <div class="clock" id="clock">--:--</div>
+  </header>
+
+  <nav id="nav">
+    <div class="nav-i on" data-p="home"><span class="ic">◉</span><span class="lb">首頁</span></div>
+    <div class="nav-i" data-p="chat"><span class="ic">💬</span><span class="lb">對話</span></div>
+    <div class="nav-i" data-p="memory"><span class="ic">🧠</span><span class="lb">記憶</span></div>
+    <div class="nav-i" data-p="tasks"><span class="ic">⏰</span><span class="lb">提醒</span></div>
+    <div class="nav-i" data-p="money"><span class="ic">💰</span><span class="lb">記帳</span></div>
+    <div class="nav-i" data-p="invest"><span class="ic">📈</span><span class="lb">投資</span></div>
+    <div class="nav-i" data-p="live"><span class="ic">📹</span><span class="lb">鏡頭</span></div>
+    <div class="nav-i" data-p="skills"><span class="ic">🛠️</span><span class="lb">能力</span></div>
+    <div class="nav-i" data-p="system"><span class="ic">⚙️</span><span class="lb">系統</span><span class="badge" id="navbadge">0</span></div>
+  </nav>
+
+  <main>
+    <!-- 首頁 -->
+    <section class="page on" id="p-home">
+      <div class="hud">
+        <!-- 左欄：時間 + 服務/金鑰量表 -->
+        <div class="hud-col">
+          <div class="hw"><div class="ht">System Time · 系統時間</div>
+            <div class="hb" id="hud-time" style="font-size:33px">--:--:--</div>
+            <div id="hud-date" style="font-size:12px;color:var(--cy);font-family:var(--mono);margin-top:4px;letter-spacing:1px">----/--/--</div>
+          </div>
+          <div class="hw click" onclick="goPage('system')"><div class="ht">Services · 後台服務</div>
+            <div class="gwrap" style="margin-top:8px">
+              <div class="gauge"><svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" fill="none" stroke="rgba(0,229,255,.12)" stroke-width="5"/><circle id="g-svc" cx="40" cy="40" r="34" fill="none" stroke="var(--ok)" stroke-width="5" stroke-linecap="round" stroke-dasharray="214" stroke-dashoffset="214" transform="rotate(-90 40 40)" style="transition:stroke-dashoffset 1s;filter:drop-shadow(0 0 5px var(--ok))"/></svg><div class="gtxt"><div class="gn" id="g-svc-n">–</div></div></div>
+              <div><div class="hb" style="font-size:16px" id="hud-svc-lb">– / –</div><div style="font-size:12px;color:var(--dim);margin-top:2px">服務正常運作</div></div>
+            </div>
+          </div>
+          <div class="hw click" onclick="goPage('system')"><div class="ht">API Keys · 金鑰</div>
+            <div class="gwrap" style="margin-top:8px">
+              <div class="gauge"><svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" fill="none" stroke="rgba(0,229,255,.12)" stroke-width="5"/><circle id="g-key" cx="40" cy="40" r="34" fill="none" stroke="var(--cy)" stroke-width="5" stroke-linecap="round" stroke-dasharray="214" stroke-dashoffset="214" transform="rotate(-90 40 40)" style="transition:stroke-dashoffset 1s;filter:drop-shadow(0 0 5px var(--cy))"/></svg><div class="gtxt"><div class="gn" id="g-key-n">–</div></div></div>
+              <div><div class="hb" style="font-size:16px" id="hud-key-lb">– / –</div><div style="font-size:12px;color:var(--dim);margin-top:2px">金鑰可用</div></div>
+            </div>
+          </div>
+        </div>
+        <!-- 中央：鋼鐵人頭盔 + 旋轉光環 -->
+        <div class="hud-center">
+          <div class="rings">
+            <svg width="560" height="560" style="animation:spin 46s linear infinite"><circle cx="280" cy="280" r="268" fill="none" stroke="rgba(0,229,255,.18)" stroke-width="1" stroke-dasharray="2 15"/><circle cx="280" cy="280" r="268" fill="none" stroke="rgba(0,229,255,.28)" stroke-width="3" stroke-dasharray="90 380" stroke-linecap="round"/></svg>
+            <svg width="480" height="480" style="animation:spinr 34s linear infinite"><circle cx="240" cy="240" r="228" fill="none" stroke="rgba(0,229,255,.34)" stroke-width="1.5" stroke-dasharray="70 30 8 30"/></svg>
+            <svg width="420" height="420" style="animation:spin 26s linear infinite"><circle cx="210" cy="210" r="200" fill="none" stroke="rgba(139,92,255,.34)" stroke-width="1.5" stroke-dasharray="4 20"/><circle cx="210" cy="210" r="200" fill="none" stroke="rgba(0,229,255,.45)" stroke-width="3" stroke-dasharray="50 580" stroke-linecap="round"/></svg>
+            <svg width="370" height="370" style="animation:spinr 16s linear infinite"><circle cx="185" cy="185" r="176" fill="none" stroke="rgba(0,229,255,.5)" stroke-width="2" stroke-dasharray="140 420" stroke-linecap="round"/></svg>
+            <svg width="335" height="335" style="animation:spin 30s linear infinite;opacity:.6"><circle cx="167.5" cy="167.5" r="160" fill="none" stroke="rgba(0,229,255,.25)" stroke-width="1" stroke-dasharray="1 9"/></svg>
+          </div>
+          <div class="helmet-wrap">
+            <svg class="helmet" viewBox="0 0 260 300">
+              <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7af4ff" stop-opacity="1"/><stop offset="1" stop-color="#0a7fa0" stop-opacity=".5"/></linearGradient></defs>
+              <!-- 外輪廓（寬盔形：寬圓頂、直側、圓方下巴）-->
+              <path d="M130 26 C88 26 58 48 52 92 C50 118 50 140 54 162 C58 192 72 220 100 244 C112 254 118 258 130 258 C142 258 148 254 160 244 C188 220 202 192 206 162 C210 140 210 118 208 92 C202 48 172 26 130 26 Z" fill="none" stroke="url(#hg)" stroke-width="2.6"/>
+              <!-- 額頭中央板（梯形）+ 雙豎縫 -->
+              <path d="M112 40 L110 92 L130 100 L150 92 L148 40" fill="none" stroke="#00e5ff" stroke-width="1.2" opacity=".5"/>
+              <!-- 眉脊（中央下凹的銳角）-->
+              <path d="M58 98 L104 108 L130 116 L156 108 L202 98" fill="none" stroke="#00e5ff" stroke-width="1.8" opacity=".9"/>
+              <!-- 眼睛（細長偏水平、發光）-->
+              <path class="eye" d="M68 122 L110 127 L109 135 L70 131 Z"/>
+              <path class="eye" d="M192 122 L150 127 L151 135 L190 131 Z"/>
+              <!-- 鼻樑中脊 + 臉頰板斜線 -->
+              <path d="M130 118 L130 180" stroke="#00e5ff" stroke-width="1.1" opacity=".5"/>
+              <path d="M110 132 L92 176 M150 132 L168 176" stroke="#00e5ff" stroke-width="1.1" opacity=".45"/>
+              <!-- 顴骨橫板 -->
+              <path d="M92 176 Q130 167 168 176" fill="none" stroke="#00e5ff" stroke-width="1.3" opacity=".5"/>
+              <!-- 嘴罩（微皺眉弧）+ 通風柵 -->
+              <path d="M100 188 Q130 181 160 188 L154 214 Q130 226 106 214 Z" fill="none" stroke="#00e5ff" stroke-width="1.5" opacity=".8"/>
+              <path d="M111 198 L149 198 M114 207 L146 207" stroke="#00e5ff" stroke-width="1.2" opacity=".55"/>
+            </svg>
+          </div>
+          <div class="hud-status"><div class="hs1">J.A.R.V.I.S</div><div class="hs2" id="coreSub">SYSTEM ONLINE</div></div>
+        </div>
+        <!-- 右欄：健康度 + 模型 + 快捷 -->
+        <div class="hud-col">
+          <div class="hw"><div class="ht">System Health · 健康度</div>
+            <div class="gwrap" style="margin-top:8px">
+              <div class="gauge"><svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" fill="none" stroke="rgba(0,229,255,.12)" stroke-width="6"/><circle id="g-health" cx="40" cy="40" r="34" fill="none" stroke="var(--cy)" stroke-width="6" stroke-linecap="round" stroke-dasharray="214" stroke-dashoffset="214" transform="rotate(-90 40 40)" style="transition:stroke-dashoffset 1s;filter:drop-shadow(0 0 7px var(--cy))"/></svg><div class="gtxt"><div class="gn" id="g-health-n" style="font-size:16px">--%</div></div></div>
+              <div><div class="hb" style="font-size:17px;color:var(--ok)" id="hud-health-lb">運作中</div><div style="font-size:12px;color:var(--dim);margin-top:2px">整體系統狀態</div></div>
+            </div>
+          </div>
+          <div class="hw click" onclick="toggleModelMenu(event)"><div class="ht">AI Model · 對話模型</div>
+            <div class="hb" id="hud-model" style="font-size:22px;margin-top:5px">— ▾</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:4px">點我切換模型</div>
+          </div>
+          <div class="hw"><div class="ht">Quick Access · 快捷</div>
+            <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;font-size:14px">
+              <span onclick="goPage('chat')" style="cursor:pointer;color:#dceaff">› 💬 對話記錄</span>
+              <span onclick="goPage('memory')" style="cursor:pointer;color:#dceaff">› 🧠 記憶</span>
+              <span onclick="goPage('money')" style="cursor:pointer;color:#dceaff">› 💰 記帳</span>
+              <span onclick="goPage('invest')" style="cursor:pointer;color:#dceaff">› 📈 投資</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel hud-svcbar" id="home-services"><div class="empty">載入服務狀態中…</div></div>
+    </section>
+
+    <!-- 對話 -->
+    <section class="page" id="p-chat">
+      <div class="ph"><div><h2>對話記錄</h2><div class="desc">你跟 Jarvis 講過的話（即時更新）</div></div></div>
+      <div class="panel" id="chat-list"></div>
+    </section>
+
+    <!-- 記憶 -->
+    <section class="page" id="p-memory">
+      <div class="ph"><div><h2>Jarvis 記得你的事</h2><div class="desc">像 markdown 文件分類整理 · 「## 標題」分區、每行「- 一件事」· 存檔後它馬上記得</div></div><button class="btn solid" onclick="saveMemory()">💾 儲存記憶</button></div>
+      <div class="panel">
+        <textarea id="mem-text" spellcheck="false" oninput="updateMemCount()" placeholder="用 ## 開頭分類，每行 - 一件事，例如：&#10;## 👤 個人資料&#10;- 我叫 Owen，台灣人&#10;&#10;## 🎨 偏好習慣&#10;- 跟我說話用繁體中文"></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:11px;font-size:12px;color:var(--dim);flex-wrap:wrap;gap:8px">
+          <span id="mem-count" style="font-family:var(--mono);color:var(--cy)">0 筆</span>
+          <span>💡「## 標題」分類、每行「- 一件事」。存檔時系統自動把每條算成語意向量（給 AI 搜尋用），你只管像寫文件一樣整理</span>
+        </div>
+      </div>
+      <div class="panel" id="rules-card" style="display:none"><h3><span class="ic">📈</span>它從你身上學到的習慣</h3><div id="mem-rules"></div></div>
+    </section>
+
+    <!-- 提醒待辦 -->
+    <section class="page" id="p-tasks">
+      <div class="ph"><div><h2>提醒 & 待辦</h2><div class="desc">到點它會在裝置上提醒你</div></div></div>
+      <div class="panel"><h3 style="margin-bottom:0"><span class="ic">⏰</span>提醒<button class="btn sm" style="margin-left:auto" onclick="saveReminders()">儲存</button></h3><div id="rem-list" style="margin-top:15px"></div>
+        <div class="addrow"><input class="add" id="rem-add" placeholder="新增提醒…例「明天下午3點 開會」「禮拜五早上11點 面試」「每天早上8點 吃藥」" onkeydown="if(event.key==='Enter')addReminder()"><button class="btn" onclick="addReminder()">+ 新增</button></div></div>
+      <div class="panel"><h3 style="margin-bottom:0"><span class="ic">✅</span>待辦<button class="btn sm" style="margin-left:auto" onclick="saveTodos()">儲存</button></h3><div id="todo-list" style="margin-top:15px"></div>
+        <div class="addrow"><input class="add" id="todo-add" placeholder="新增待辦…"><button class="btn" onclick="addTodo()">+ 新增</button></div>
+      </div>
+    </section>
+
+    <!-- 記帳（現金流：收入/開銷/預算）-->
+    <section class="page" id="p-money">
+      <div class="ph"><div><h2>記帳</h2><div class="desc">每月收入、固定開銷、生活開銷、預算，全部你能編輯</div></div>
+        <button class="btn" onclick="loadFinance(true)">↻ 重新整理</button></div>
+      <div class="panel" id="money-hero"><div class="empty">載入中…</div></div>
+      <div class="grid g4" id="money-stats" style="margin-bottom:18px"></div>
+      <div class="panel" id="fin-quick"></div>
+      <div class="panel" id="fin-analysis"></div>
+      <div class="panel" id="fin-catbudget"></div>
+      <div class="panel" id="fin-budget"></div>
+      <div class="panel" id="fin-income"></div>
+      <div class="panel" id="fin-fixed"></div>
+      <div class="panel" id="fin-expenses"></div>
+    </section>
+
+    <!-- 投資（持股即時報酬）-->
+    <section class="page" id="p-invest">
+      <div class="ph"><div><h2>投資</h2><div class="desc" id="invest-updated">台股美股即時市價、報酬率、當日漲跌</div></div>
+        <button class="btn solid" onclick="loadFinance(true)">↻ 立即更新</button></div>
+      <div class="grid g4" id="invest-stats" style="margin-bottom:18px"></div>
+      <div class="panel" id="fin-fire"></div>
+      <div class="panel" id="fin-trend"></div>
+      <div class="panel" id="fin-alloc"></div>
+      <div class="panel" id="fin-portfolio"></div>
+    </section>
+
+    <!-- 鏡頭 -->
+    <section class="page" id="p-live">
+      <div class="ph"><div><h2>即時鏡頭</h2><div class="desc">看 StackChan 眼睛看到的畫面</div></div><button class="btn" id="live-btn" onclick="toggleLive()">▶ 開始</button></div>
+      <div class="panel" style="text-align:center">
+        <div class="livebox"><div class="cn"></div><div id="live-badge" class="live-badge" style="display:none"><span class="d"></span>LIVE</div><img id="live-img" alt="鏡頭"></div>
+        <div id="live-hint" class="empty">按「開始」串流即時畫面</div>
+      </div>
+    </section>
+
+    <!-- 能力 -->
+    <section class="page" id="p-skills">
+      <div class="ph"><div><h2>Jarvis 會的事</h2><div class="desc">它現在能幫你做的所有事情</div></div></div>
+      <div class="panel"><h3><span class="ic">💡</span>用講的就能叫它做</h3><div id="skill-tools"></div></div>
+      <div class="panel"><h3><span class="ic">🤖</span>身體動作</h3><div id="skill-dev"></div></div>
+    </section>
+
+    <!-- 系統 -->
+    <section class="page" id="p-system">
+      <div class="ph"><div><h2>系統</h2><div class="desc">模型、金鑰、服務狀態、待你確認的事</div></div><button class="btn" onclick="loadStatus()">↻ 掃描</button></div>
+      <div class="panel" id="sys-model"></div>
+      <div class="panel" id="sys-keys"></div>
+      <div class="panel" id="sys-services"></div>
+    </section>
+  </main>
+</div>
+<div id="approvals"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+let memFacts=[],remData=[],todoData=[];
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2100)}
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+async function get(u){try{const r=await fetch(u);if(!r.ok)return null;return await r.json()}catch(e){return null}}
+async function send(u,m,b){try{const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});return await r.json()}catch(e){return {ok:false,error:'連線失敗'}}}
+function pod(ic,n,l,warn){return `<div class="pod"><span class="ic">${ic}</span><div class="n" ${warn?'style="color:var(--warn)"':''}>${n}</div><div class="l">${l}</div></div>`;}
+
+$('#nav').onclick=e=>{const a=e.target.closest('.nav-i');if(!a)return;
+  $$('.nav-i').forEach(x=>x.classList.remove('on'));a.classList.add('on');
+  $$('.page').forEach(x=>x.classList.remove('on'));$('#p-'+a.dataset.p).classList.add('on');
+  if((a.dataset.p==='money'||a.dataset.p==='invest')&&!fin.ov)loadFinance();};
+setInterval(()=>{$('#clock').textContent=new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',hour12:false});},1000);
+
+function goPage(p){const el=document.querySelector('.nav-i[data-p='+p+']');if(el)el.click();}
+function clickPod(ic,n,l,page,warn){return `<div onclick="goPage('${page}')" style="cursor:pointer" title="點我看${l}">${pod(ic,n,l,warn)}</div>`;}
+// 首頁＝Jarvis 狀態監控，由 loadStatus 驅動（不抓任何個人資料）
+async function loadHome(){loadStatus();}
+function msgHTML(c,t){const src=c.source==='Telegram'?'📱 Telegram':'🎙️ StackChan';
+  return `<div class="msg"><div class="t">${esc(c.time||'')} · <span style="color:${c.source==='Telegram'?'var(--cy)':'var(--vio)'}">${src}</span></div><div class="u">你：${esc(c.user)}</div><div class="a">Jarvis：${esc(c.assistant)}</div></div>`;}
+
+async function loadChat(){const d=await get('/api/chat');if(!d)return;
+  $('#chat-list').innerHTML=d.chats.length?d.chats.map(c=>msgHTML(c,true)).join(''):'<div class="empty">還沒有對話</div>';}
+
+async function loadMemory(){const d=await get('/api/memory/doc');const ta=$('#mem-text');if(!ta)return;
+  if(!d||!d.ok){ta.placeholder='⚠ 讀取失敗';return;}
+  if(document.activeElement!==ta)ta.value=d.doc||'';  // 正在編輯就不覆蓋
+  updateMemCount();}
+function updateMemCount(){const ta=$('#mem-text');if(!ta)return;
+  const lines=(ta.value||'').split('\n');
+  const facts=lines.filter(x=>{const s=x.trim();return s&&!s.startsWith('#');}).length;
+  const secs=lines.filter(x=>x.trim().startsWith('##')).length;
+  const e=$('#mem-count');if(e)e.textContent=facts+' 筆 · '+secs+' 個分類';}
+async function saveMemory(force){const ta=$('#mem-text');if(!ta)return;
+  toast('儲存中…（在算語意索引）');
+  const r=await send('/api/memory/doc','PUT',{doc:ta.value||'',force:!!force});
+  if(r&&r.ok){toast('✅ 已儲存 '+r.count+' 筆記憶，Jarvis 馬上記得了');loadMemory();loadHome();}
+  else if(r&&r.need_force){if(confirm((r.error||'疑似一次刪太多')+'\n\n仍要儲存？'))saveMemory(true);}
+  else toast('儲存失敗');}
+async function loadRules(){const d=await get('/api/evolution');if(!d)return;const rs=d.learned_rules||[];
+  $('#rules-card').style.display=rs.length?'block':'none';
+  $('#mem-rules').innerHTML=rs.map(r=>`<div class="item"><span class="tag" style="background:rgba(139,92,255,.13);color:#b69bff;border:1px solid rgba(139,92,255,.35)">習慣</span><span class="txt">${esc(r)}</span></div>`).join('');}
+
+async function loadReminders(){const d=await get('/api/reminders');if(!d)return;remData=d.reminders;renderRem();}
+function schedLabel(r){const rep=(r.repeat||'').trim();
+  if(rep.startsWith('once:')){const ds=rep.slice(5);const d=new Date(ds+'T00:00:00');
+    if(isNaN(d))return ds;
+    const wd=['日','一','二','三','四','五','六'][d.getDay()];
+    const today=new Date();today.setHours(0,0,0,0);
+    const diff=Math.round((d-today)/86400000);
+    const rel=diff===0?'今天':diff===1?'明天':diff===2?'後天':'';
+    return `${(d.getMonth()+1)}/${d.getDate()} 週${wd}${rel?' ·'+rel:''}`;}
+  if(rep==='daily'||rep==='')return '每天';
+  if(rep.startsWith('weekly:'))return '每週'+['一','二','三','四','五','六','日'][+rep.slice(7)||0];
+  if(rep.startsWith('monthly:'))return '每月'+rep.slice(8)+'號';
+  if(rep.startsWith('annual:')){const p=rep.slice(7).split('-');return `每年${+p[0]}/${+p[1]}`;}
+  return rep;}
+function schedColor(r){const rep=(r.repeat||'');
+  if(rep.startsWith('once:')){const d=new Date(rep.slice(5)+'T00:00:00');const today=new Date();today.setHours(0,0,0,0);
+    const diff=Math.round((d-today)/86400000);return diff<=1?'var(--warn)':'var(--gold)';}
+  return 'var(--cy)';}
+function renderRem(){$('#rem-list').innerHTML=remData.length?remData.map((r,i)=>
+  `<div class="item" style="gap:10px">
+     <span style="flex:0 0 auto;min-width:104px;font-size:12.5px;font-weight:700;color:${schedColor(r)};background:rgba(0,229,255,.06);border:1px solid var(--line);border-radius:8px;padding:5px 9px;text-align:center">📅 ${esc(schedLabel(r))}</span>
+     <span class="txt" contenteditable onblur="remData[${i}].time=this.innerText.trim()" style="flex:0 0 56px;font-family:var(--mono);font-weight:700;color:#eaf6ff">${esc(r.time)}</span>
+     <span class="txt" contenteditable onblur="remData[${i}].message=this.innerText.trim()">${esc(r.message)}</span>
+     <button class="btn sm danger" onclick="remData.splice(${i},1);renderRem()">刪</button></div>`).join(''):'<div class="empty">沒有提醒</div>';}
+async function saveReminders(){await send('/api/reminders','PUT',{reminders:remData});toast('提醒已儲存');}
+async function addReminder(){const v=($('#rem-add').value||'').trim();if(!v){toast('輸入要提醒的事，例「明天下午3點 開會」');return;}
+  const r=await send('/api/reminder','POST',{text:v});
+  if(r&&r.ok){toast('✅ '+(r.nice||'提醒已設好'));$('#rem-add').value='';loadReminders();}
+  else toast((r&&r.text)||'我沒抓到時間，說清楚一點例「明天下午3點 開會」');}
+async function loadTodos(){const d=await get('/api/todos');if(!d)return;todoData=d.todos;renderTodo();}
+function renderTodo(){$('#todo-list').innerHTML=todoData.length?todoData.map((t,i)=>
+  `<div class="item"><span class="txt" contenteditable oninput="todoData[${i}]=this.innerText">${esc(t)}</span><button class="btn sm danger" onclick="todoData.splice(${i},1);renderTodo()">刪</button></div>`).join(''):'<div class="empty">沒有待辦</div>';}
+function addTodo(){const v=$('#todo-add').value.trim();if(!v)return;todoData.push(v);$('#todo-add').value='';renderTodo();}
+async function saveTodos(){await send('/api/todos','PUT',{todos:todoData.filter(x=>(x||'').trim())});toast('待辦已儲存');}
+
+// ===== 理財 =====
+let fin={income:[],fixed:[],holdings:[],expenses:[],budget:{},ov:null,pf:null};
+function fmt(n){return (Math.round(n||0)).toLocaleString('en-US');}
+function sgn(n){return (n>=0?'+':'')+fmt(n);}
+function clr(n){return n>0?'var(--ok)':n<0?'var(--bad)':'var(--dim)';}
+async function loadFinance(force,silent){
+  if(fin.ov&&!force){renderFin();return;}
+  if(!silent&&!fin.ov)$('#invest-stats').innerHTML='<div class="empty" style="grid-column:1/-1">⏳ 抓即時股價中…</div>';
+  const d=await get('/api/finance');
+  if(!d||!d.ok){if(silent)return;const msg='<div class="empty" style="grid-column:1/-1">⚠ 讀取失敗：'+esc((d&&d.error)||'理財服務沒回應')+'</div>';$('#money-stats').innerHTML=msg;$('#invest-stats').innerHTML=msg;return;}
+  const o=d.data;fin.ov=o;fin.income=o.income_list||[];fin.fixed=o.fixed_list||[];
+  fin.holdings=o.holdings||[];fin.expenses=o.expenses||[];fin.budget=o.budget||{};fin.pf=o.portfolio||{items:[]};
+  renderFin();
+}
+function renderFin(){const o=fin.ov;if(!o)return;
+  // 記帳頁：純現金流，不混投資
+  $('#money-stats').innerHTML=pod('💵','$'+fmt(o.income),'月收入')
+    +pod('💎','$'+fmt(o.auto_saved||0),'已自動存(投資)')
+    +pod(o.remaining>=0?'✅':'⚠️','$'+fmt(o.remaining||0),'本期還能花')
+    +pod('💸','$'+fmt(o.month_var||0),'本期已花');
+  renderBudget();renderList('income','💰','每月收入','收入來源','薪水/獎金…');
+  renderList('fixed','📌','固定開銷','項目','房租/訂閱…');renderExpenses();
+  if(fan)renderQuick(),renderAnalysis(),renderCatBudget();else loadAnalysis();
+  // 投資頁：純投資
+  const pf=fin.pf||{items:[]};const closed=pf.market_open===false;
+  const todayPod=closed?pod('🌙','休市','今日（未開盤）'):pod(pf.total_today>=0?'📈':'📉','<span style="color:'+tc(pf.total_today)+'">'+(pf.total_today>=0?'+':'')+'$'+fmt(Math.abs(pf.total_today))+'</span>','今日 '+pf.total_todaypct+'%');
+  $('#invest-stats').innerHTML=pod('💼','$'+fmt(pf.total_value),'總市值')
+    +pod('💵','$'+fmt(pf.total_cost),'總成本')
+    +pod(pf.total_ret>=0?'📈':'📉','<span style="color:'+tc(pf.total_ret)+'">'+(pf.total_ret>=0?'+':'')+'$'+fmt(Math.abs(pf.total_ret))+'</span>','總報酬 '+pf.total_retpct+'%')
+    +todayPod;
+  renderAlloc();renderPortfolio();renderTrend();renderHomeFinance();renderFire();
+  // 更新時間 + 即時狀態（讓你看得到它在自動更新）
+  const t=new Date().toLocaleTimeString('zh-TW',{hour12:false});
+  const iu=$('#invest-updated');
+  if(iu)iu.innerHTML=(closed?'🌙 休市中':'<span style="color:var(--ok)">🟢 盤中即時</span>')+` · 自動更新 · 最後更新 ${t}`;
+}
+// 財務自由（FIRE）進度
+function renderFire(){const o=fin.ov;if(!o)return;const pct=Math.min(100,o.fire_pct||0);const pf=o.portfolio||{};
+  $('#fin-fire').innerHTML=`<h3><span class="ic">🔥</span>財務自由進度（FIRE）<span style="margin-left:auto;font-size:12px;color:var(--dim)">年開銷 NT$<span class="txt" contenteditable onblur="saveFireAnnual(this)" style="color:var(--gold);font-family:var(--mono);font-weight:700;outline:none;border-bottom:1px dashed var(--line2)">${fmt(o.annual_expense)}</span> × 25</span></h3>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px">
+      <span style="font-family:var(--head);font-size:32px;font-weight:700;color:var(--gold);text-shadow:0 0 18px rgba(255,207,92,.45)">${(o.fire_pct||0).toFixed(1)}%</span>
+      <span style="font-size:13px;color:var(--dim)">目標 NT$${fmt(o.fire_target)}</span></div>
+    <div style="height:15px;background:rgba(255,255,255,.07);border-radius:8px;overflow:hidden;border:1px solid var(--line)">
+      <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--gold),var(--ok));box-shadow:0 0 14px var(--gold);transition:width .8s"></div></div>
+    <div style="display:flex;gap:10px;margin-top:15px;flex-wrap:wrap">
+      <div style="flex:1;min-width:135px"><div style="font-size:12px;color:var(--dim)">🏦 銀行現金（點數字可改）</div>
+        <div class="item" style="margin:6px 0 0"><span style="color:var(--dim)">$</span><span class="txt" contenteditable onblur="saveCash(this)" style="font-family:var(--mono);font-weight:700;color:var(--gold)">${fmt(o.cash||0)}</span></div></div>
+      <div style="flex:1;min-width:135px"><div style="font-size:12px;color:var(--dim)">💼 投資市值</div><div style="font-family:var(--head);font-size:21px;margin-top:8px">NT$${fmt(pf.total_value||0)}</div></div>
+      <div style="flex:1;min-width:135px"><div style="font-size:12px;color:var(--dim)">🏆 淨資產（現金+投資+結餘）</div><div style="font-family:var(--head);font-size:21px;margin-top:8px;color:var(--ok)">NT$${fmt(o.net_worth)}</div></div>
+    </div>`;}
+async function saveCash(el){const v=numv(el);const r=await send('/api/finance/op','POST',{action:'set_cash',amount:v});if(r&&r.ok){toast('現金已更新');loadFinance(true);}else toast('更新失敗');}
+async function saveFireAnnual(el){const v=numv(el);const r=await send('/api/finance/op','POST',{action:'set_fire_annual',amount:v});if(r&&r.ok){toast('FIRE 年開銷已更新');loadFinance(true);}else toast('更新失敗');}
+// 首頁財務一覽（點一下跳投資頁）
+function renderHomeFinance(){const o=fin.ov;const box=$('#money-hero');if(!o||!box)return;
+  const usedPct=o.spendable>0?Math.min(100,Math.round(o.month_var/o.spendable*100)):0;
+  box.innerHTML=`<h3><span class="ic">💰</span>本期還能花 <span style="font-size:11px;color:var(--dim);font-weight:400;margin-left:6px">${esc(o.cycle_label||'')}（${o.payday||15}號發薪）</span></h3>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 32px;padding:2px 2px 14px">
+      <div><div style="font-size:13px;color:var(--dim)">本期還能花</div>
+        <div style="font-family:var(--head);font-size:42px;font-weight:900;color:var(--gold);text-shadow:0 0 20px rgba(255,207,92,.4);line-height:1.1">$${fmt(o.remaining||0)}</div></div>
+      <div style="text-align:center;padding:0 6px"><div style="font-size:13px;color:var(--dim)">每天可花</div>
+        <div style="font-family:var(--head);font-size:28px;font-weight:700;color:var(--cy)">$${fmt(o.daily_allowance||0)}</div></div>
+      <div style="text-align:center"><div style="font-size:13px;color:var(--dim)">距發薪</div>
+        <div style="font-family:var(--head);font-size:28px;font-weight:700;color:#eaf6ff">${o.days_left||0} <span style="font-size:14px;color:var(--dim)">天</span></div></div>
+    </div>
+    <div style="height:9px;background:rgba(255,255,255,.06);border-radius:5px;overflow:hidden;margin-bottom:6px"><div style="height:100%;width:${usedPct}%;background:${usedPct>=100?'var(--bad)':'linear-gradient(90deg,var(--cy),var(--gold))'};box-shadow:0 0 10px var(--cy)"></div></div>
+    <div style="font-size:12px;color:var(--dimer)">本期可花 $${fmt(o.spendable||0)}（已先扣固定$${fmt(o.fixed||0)}+存款$${fmt(o.auto_saved||0)}）· 已花 $${fmt(o.month_var||0)}</div>`;}
+// 淨資產成長曲線（每天累積一點）
+async function renderTrend(){const d=await get('/api/finance/history');const h=(d&&d.history)||[];
+  const el=$('#fin-trend');if(!el)return;
+  if(h.length<2){el.innerHTML=`<h3><span class="ic">📉</span>淨資產走勢</h3><div class="empty">每天會自動記一筆，明天起這裡就會長出成長曲線 📈（今天已記第一筆 NT$${fmt(h.length?h[0].net_worth:(fin.ov?fin.ov.net_worth:0))}）</div>`;return;}
+  const vals=h.map(x=>x.net_worth||0);const min=Math.min(...vals),max=Math.max(...vals),rng=(max-min)||1;
+  const W=620,H=120,n=h.length;
+  const pts=h.map((x,i)=>[i/(n-1)*W,H-((x.net_worth-min)/rng)*(H-16)-8]);
+  const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const area=line+` L${W} ${H} L0 ${H} Z`;
+  const first=vals[0],last=vals[vals.length-1],chg=last-first,chgp=first?(chg/first*100):0;
+  el.innerHTML=`<h3><span class="ic">📈</span>淨資產走勢<span style="margin-left:auto;font-size:13px;color:${chg>=0?'var(--ok)':'var(--bad)'};font-family:var(--mono)">${chg>=0?'+':''}${fmt(chg)}（${chgp.toFixed(1)}%）自 ${esc(h[0].date)}</span></h3>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:130px" preserveAspectRatio="none">
+      <defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(0,229,255,.35)"/><stop offset="1" stop-color="rgba(0,229,255,0)"/></linearGradient></defs>
+      <path d="${area}" fill="url(#tg)"/><path d="${line}" fill="none" stroke="var(--cy)" stroke-width="2" style="filter:drop-shadow(0 0 5px var(--cy))"/>
+    </svg>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--dimer);font-family:var(--mono)"><span>${esc(h[0].date)}　NT$${fmt(first)}</span><span>${esc(h[h.length-1].date)}　NT$${fmt(last)}</span></div>`;}
+// 資產配置（每檔佔比 + 台股/美股）
+function renderAlloc(){const pf=fin.pf||{items:[]};const rate=pf.usd_twd||31.5;
+  const twd=it=>(it.market==='US'?(it.value||0)*rate:(it.value||0));
+  const items=(pf.items||[]).filter(it=>it.price!=null&&(it.value||0)>0);
+  if(!items.length){$('#fin-alloc').innerHTML='<h3><span class="ic">🥧</span>資產配置</h3><div class="empty">還沒有持股</div>';return;}
+  const total=items.reduce((a,it)=>a+twd(it),0)||1;
+  const pal=['#00e5ff','#3a7bd5','#8b5cff','#00ffa3','#ffcf5c','#ff7eb6','#ff4d6d','#46d3ff','#b69bff','#7CFFB2'];
+  const sorted=items.slice().sort((a,b)=>twd(b)-twd(a));
+  const bar=sorted.map((it,i)=>{const p=twd(it)/total*100;return `<div title="${esc(it.name||it.symbol)} ${p.toFixed(1)}%" style="width:${p}%;background:${pal[i%pal.length]};height:100%"></div>`;}).join('');
+  const legend=sorted.map((it,i)=>{const p=twd(it)/total*100;return `<div style="display:flex;align-items:center;gap:7px;font-size:12.5px">
+     <span style="width:11px;height:11px;border-radius:3px;background:${pal[i%pal.length]};box-shadow:0 0 7px ${pal[i%pal.length]}"></span>
+     <span style="flex:1">${esc(it.name||it.symbol)}</span><span style="font-family:var(--mono);color:var(--dim)">${p.toFixed(1)}%</span></div>`;}).join('');
+  const twv=items.filter(it=>it.market!=='US').reduce((a,it)=>a+twd(it),0);const usv=total-twv;
+  $('#fin-alloc').innerHTML=`<h3><span class="ic">🥧</span>資產配置</h3>
+    <div style="display:flex;height:18px;border-radius:9px;overflow:hidden;margin-bottom:14px;border:1px solid var(--line)">${bar}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:8px 18px;margin-bottom:14px">${legend}</div>
+    <div style="display:flex;gap:10px;font-size:13px">
+      <span style="flex:1;text-align:center;padding:9px;background:var(--glass2);border-radius:9px;border:1px solid var(--line)">🇹🇼 台股 <b style="color:var(--cy)">${(twv/total*100).toFixed(0)}%</b>　NT$${fmt(twv)}</span>
+      <span style="flex:1;text-align:center;padding:9px;background:var(--glass2);border-radius:9px;border:1px solid var(--line)">🇺🇸 美股 <b style="color:var(--vio)">${(usv/total*100).toFixed(0)}%</b>　NT$${fmt(usv)}</span>
+    </div>`;}
+// 預算 + 進度條
+function renderBudget(){const o=fin.ov,b=fin.budget||{};
+  const bar=(pct,c)=>`<div style="height:9px;background:rgba(255,255,255,.07);border-radius:6px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.min(100,pct)}%;background:${c};box-shadow:0 0 10px ${c}"></div></div>`;
+  const usedPct=o.spendable>0?Math.round(o.month_var/o.spendable*100):0;
+  $('#fin-budget').innerHTML=`<h3><span class="ic">🎯</span>本期預算 <span style="font-size:11px;color:var(--dim);font-weight:400">· ${esc(o.cycle_label||'')}（${o.payday||15}號發薪起算）</span></h3>
+   <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
+    <div><div style="font-size:13px;color:var(--dim);margin-bottom:5px">每月自動存（發薪先扣，不算可花）</div>
+     <div class="item" style="margin:0"><span style="color:var(--dim)">$</span><span class="txt" contenteditable onblur="fin.budget.save_goal=numv(this)">${esc(''+(b.save_goal||0))}</span></div>
+     <div style="font-size:12px;color:var(--ok);margin-top:7px">💎 發薪當天直接轉去投資</div></div>
+    <div><div style="font-size:13px;color:var(--dim);margin-bottom:5px">本期可花（已扣固定+存款）</div>
+     <div class="item" style="margin:0"><span style="color:var(--dim)">$</span><span style="font-family:var(--mono);font-weight:700;color:var(--gold)">${fmt(o.spendable||0)}</span></div>
+     <div style="font-size:12px;color:${usedPct>=100?'var(--bad)':'var(--dim)'};margin-top:7px">已花 $${fmt(o.month_var)} · 還能花 <b style="color:${o.remaining>=0?'var(--ok)':'var(--bad)'}">$${fmt(o.remaining)}</b></div>${bar(usedPct,usedPct>=100?'var(--bad)':'var(--cy)')}</div>
+   </div>
+   <div style="margin-top:13px;padding:11px 14px;background:rgba(0,255,163,.06);border:1px solid rgba(0,255,163,.25);border-radius:11px;font-size:13px">
+     💎 每月自動投入投資 <b style="color:var(--ok)">$${fmt(b.save_goal||0)}</b>　·　累積已投入 <b style="color:var(--ok)">NT$${fmt(o.invest_committed||0)}</b>（${o.invest_months||0} 個月）
+     <span style="color:var(--dimer);font-size:11.5px">　每月發薪日(${o.payday||15}號)自動計入</span></div>
+   <div style="margin-top:14px"><button class="btn solid" onclick="saveBudget()">儲存</button>　<span style="font-size:12px;color:var(--dim)">發薪日：<span class="txt" contenteditable onblur="savePayday(this)" style="color:var(--cy);outline:none;border-bottom:1px dashed var(--line2)">${o.payday||15}</span> 號</span></div>`;}
+async function savePayday(el){const v=Math.max(1,Math.min(28,numv(el)||15));const r=await send('/api/finance/op','POST',{action:'set_payday',amount:v});if(r&&r.ok){toast('發薪日已設為 '+v+' 號');loadFinance(true);}}
+async function saveBudget(){const r=await send('/api/finance/budget','POST',{save_goal:fin.budget.save_goal||0,spend_limit:fin.budget.spend_limit||0});if(r&&r.ok){toast('預算已儲存');loadFinance(true);}else toast('儲存失敗');}
+// 投資組合 — 證券平台式表格（分台股/美股、欄位對齊、紅漲綠跌、現價放大）
+function fmt2(n){return (Math.round((n||0)*100)/100).toLocaleString('en-US',{maximumFractionDigits:2});}
+function tc(n){return n>0?'var(--bad)':n<0?'var(--ok)':'var(--dim)';}  // 台股慣例：紅漲(--bad紅) 綠跌(--ok綠)
+function _addBtns(){return `<div style="display:flex;gap:9px;margin-top:12px"><button class="btn" onclick="addHolding()">＋ 新增持股</button><button class="btn solid" onclick="saveHoldings()">儲存</button></div>`;}
+function renderPortfolio(){const pf=fin.pf||{items:[]};const closed=pf.market_open===false;
+  const tag=closed?'<span style="font-size:11px;color:var(--dim);font-weight:400">· 休市</span>':'<span style="font-size:11px;color:var(--ok);font-weight:400">· 🟢 即時（紅漲綠跌）</span>';
+  const head=`<h3><span class="ic">📈</span>持股明細 ${tag}</h3>`;
+  if(!(fin.holdings||[]).length){$('#fin-portfolio').innerHTML=head+'<div class="empty">還沒有持股，按下面「新增持股」加一檔</div>'+_addBtns();return;}
+  const th=`<div class="ph2">股票</div><div class="ph2 r">股數</div><div class="ph2 r">均價</div><div class="ph2 r">現價</div><div class="ph2 r">漲跌</div><div class="ph2 r">報酬率</div><div class="ph2 r">市值(台幣)</div><div class="ph2"></div>`;
+  const rowsFor=(market)=>(fin.holdings||[]).map((h,i)=>({h,i}))
+    .filter(x=>(x.h.market||'TW')===market)
+    .sort((a,b)=>{const va=(pf.items.find(z=>z.symbol===a.h.symbol)||{}).value||0,vb=(pf.items.find(z=>z.symbol===b.h.symbol)||{}).value||0;return vb-va;})
+    .map(({h,i})=>{
+      const q=(pf.items||[]).find(x=>x.symbol===h.symbol&&x.market===h.market)||{};
+      const has=q.price!=null;
+      const arrow=has&&!closed&&q.today!=0?(q.today>0?'▲':'▼'):'';
+      const cur=q.currency==='USD'?'$':'';
+      const twval=q.currency==='USD'?Math.round((q.value||0)*(pf.usd_twd||31.5)):(q.value||0);
+      return `<div class="cell nm"><b>${esc(h.name||h.symbol||'—')}</b><small>${esc(h.symbol||'?')}</small></div>
+        <div class="cell r"><span class="e2" contenteditable onblur="editHold(${i},'shares',this)">${fmt(h.shares)}</span></div>
+        <div class="cell r"><span class="e2" contenteditable onblur="editHold(${i},'cost',this)">${esc(''+(h.cost||0))}</span></div>
+        <div class="cell r px" style="color:${has?(closed?'#eaf6ff':tc(q.today)):'var(--warn)'}">${has?cur+fmt2(q.price):'查無'}</div>
+        <div class="cell r" style="color:${has&&!closed?tc(q.today):'var(--dim)'}">${closed?'休市':(has?arrow+' '+(q.todaypct>=0?'+':'')+q.todaypct+'%':'—')}</div>
+        <div class="cell r" style="flex-direction:column;align-items:flex-end;gap:0;color:${has?tc(q.ret):'var(--dim)'}">
+          <span style="font-weight:700">${has?(q.retpct>=0?'+':'')+q.retpct+'%':'—'}</span>
+          <span style="font-size:11px">${has?(q.ret>=0?'+':'')+fmt(q.ret):''}</span></div>
+        <div class="cell r">${has?fmt(twval):'—'}</div>
+        <div class="cell del" title="刪除" onclick="delHolding(${i})">✕</div>`;}).join('');
+  const tw=rowsFor('TW'), us=rowsFor('US');
+  let body='';
+  if(tw)body+='<div class="grp">🇹🇼 台股</div>'+tw;
+  if(us)body+='<div class="grp">🇺🇸 美股</div>'+us;
+  const fx=`<div style="font-size:11px;color:var(--dimer);margin-top:9px">點股數/均價可直接改 · 美股市值已用匯率 USDTWD ${pf.usd_twd} 換算台幣</div>`;
+  $('#fin-portfolio').innerHTML=head+`<div class="ptwrap"><div class="ptbl">${th}${body}</div></div>`+fx+_addBtns();}
+let _holdTimer=null;
+function editHold(i,field,el){fin.holdings[i][field]=numv(el);clearTimeout(_holdTimer);_holdTimer=setTimeout(()=>saveHoldings(),1300);}
+function delHolding(i){const h=fin.holdings[i];if(confirm('確定刪除 '+(h.name||h.symbol)+'？')){fin.holdings.splice(i,1);saveHoldings();}}
+async function addHolding(){
+  const sym=prompt('股票代號（台股如 2330、美股如 AAPL）：');if(!sym||!sym.trim())return;
+  const sh=prompt('持有股數：','');if(sh===null)return;
+  const co=prompt('每股平均成本（買進單價）：','');if(co===null)return;
+  const us=/^[A-Za-z]/.test(sym.trim());
+  fin.holdings.push({symbol:sym.trim().toUpperCase(),market:us?'US':'TW',name:'',
+                     shares:parseFloat((''+sh).replace(/[^0-9.\-]/g,''))||0,
+                     cost:parseFloat((''+co).replace(/[^0-9.\-]/g,''))||0});
+  toast('新增中，抓即時報價…');
+  await saveHoldings();   // 自動存 + 抓報價 + 自動補股名
+}
+function editHoldingMeta(i){const h=fin.holdings[i];const s=prompt('股票代號：',h.symbol||'');if(s===null)return;h.symbol=s.trim().toUpperCase();
+  const m=prompt('市場 輸入 tw 或 us：',(h.market||'TW').toLowerCase());if(m!==null)h.market=/us/i.test(m)?'US':'TW';
+  const n=prompt('名稱：',h.name||'');if(n!==null)h.name=n.trim();renderHoldingsOnly();}
+function renderHoldingsOnly(){renderPortfolio();}
+async function saveHoldings(){const r=await send('/api/finance/holdings','PUT',{items:fin.holdings});if(r&&r.ok){toast('持股已存，更新報價中');loadFinance(true);}else toast('儲存失敗');}
+// 通用清單（收入 / 固定開銷）：name + amount
+function renderList(key,ic,title,col,ph){
+  const rows=(fin[key]||[]).map((it,i)=>`<div class="item">
+    <span class="txt" contenteditable onblur="fin.${key}[${i}].name=this.innerText.trim()" style="flex:0 0 auto;min-width:80px">${esc(it.name||'')}</span>
+    <span class="txt" contenteditable onblur="fin.${key}[${i}].note=this.innerText.trim()" style="flex:1;font-size:12px;color:var(--warn)">${esc(it.note||'')}</span>
+    <span style="color:var(--dim)">$</span><span class="txt" contenteditable onblur="fin.${key}[${i}].amount=numv(this)" style="flex:0 0 90px;font-family:var(--mono);font-weight:700;color:var(--gold)">${esc(''+(it.amount||0))}</span>
+    <button class="btn sm danger" onclick="fin.${key}.splice(${i},1);renderFin()">刪</button></div>`).join('');
+  const sum=(fin[key]||[]).reduce((a,b)=>a+(+b.amount||0),0);
+  $('#fin-'+key).innerHTML=`<h3><span class="ic">${ic}</span>${title}<span style="margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--gold)">合計 $${fmt(sum)}</span></h3>`
+    +(rows||`<div class="empty">還沒有${title}</div>`)
+    +`<div style="display:flex;gap:9px;margin-top:12px"><button class="btn" onclick="fin.${key}.push({name:'',amount:0});renderFin()">＋ 新增</button><button class="btn solid" onclick="saveList('${key}')">儲存</button></div>`;}
+async function saveList(key){const r=await send('/api/finance/'+key,'PUT',{items:fin[key].filter(x=>(x.name||'').trim()||+x.amount)});if(r&&r.ok){toast('已儲存');loadFinance(true);}else toast('儲存失敗');}
+// 生活開銷（可刪掉亂寫的）：amount + category + note + date
+function renderExpenses(){
+  const rows=(fin.expenses||[]).map((e,i)=>`<div class="item">
+    <span style="color:var(--dim)">$</span><span class="txt" contenteditable onblur="fin.expenses[${i}].amount=numv(this)" style="flex:0 0 70px;font-family:var(--mono);font-weight:700;color:var(--gold)">${esc(''+(e.amount||0))}</span>
+    <span class="txt" contenteditable onblur="fin.expenses[${i}].category=this.innerText.trim()" style="flex:0 0 90px">${esc(e.category||'')}</span>
+    <span class="txt" contenteditable onblur="fin.expenses[${i}].note=this.innerText.trim()">${esc(e.note||'')}</span>
+    <span class="txt" contenteditable onblur="fin.expenses[${i}].date=this.innerText.trim()" style="flex:0 0 92px;font-size:12px;font-family:var(--mono);color:var(--dimer)">${esc(e.date||'')}</span>
+    <button class="btn sm danger" onclick="fin.expenses.splice(${i},1);renderExpenses()">刪</button></div>`).join('');
+  // 本月分類統計（只算本月）
+  const ym=new Date().toISOString().slice(0,7);
+  const byCat={};(fin.expenses||[]).forEach(e=>{if((e.date||'').startsWith(ym)){byCat[e.category||'其他']=(byCat[e.category||'其他']||0)+(+e.amount||0);}});
+  const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);const catTot=cats.reduce((a,c)=>a+c[1],0)||1;
+  const pal=['#ffcf5c','#00e5ff','#8b5cff','#00ffa3','#ff7eb6','#3a7bd5','#ff4d6d'];
+  const catBar=cats.length?`<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:10px;border:1px solid var(--line)">${cats.map((c,i)=>`<div title="${esc(c[0])} $${fmt(c[1])}" style="width:${c[1]/catTot*100}%;background:${pal[i%pal.length]}"></div>`).join('')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:14px;font-size:12.5px">${cats.map((c,i)=>`<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:${pal[i%pal.length]}"></span>${esc(c[0])} <b style="color:var(--gold);font-family:var(--mono)">$${fmt(c[1])}</b></span>`).join('')}</div>`:'';
+  $('#fin-expenses').innerHTML=`<h3><span class="ic">🧾</span>生活開銷（你跟 Jarvis 說花了多少都記在這，可直接改/刪）<span style="margin-left:auto;font-size:13px;color:var(--gold);font-family:var(--mono)">本月 $${fmt(catTot===1&&!cats.length?0:catTot)}</span></h3>`
+    +catBar
+    +(rows||'<div class="empty">還沒有生活開銷</div>')
+    +`<div style="display:flex;gap:9px;margin-top:12px"><button class="btn" onclick="fin.expenses.unshift({amount:0,category:'其他',note:'',date:new Date().toISOString().slice(0,10)});renderExpenses()">＋ 手動加一筆</button><button class="btn solid" onclick="saveExpenses()">儲存</button></div>`;}
+async function saveExpenses(){const r=await send('/api/finance/expenses','PUT',{items:fin.expenses.filter(e=>+e.amount>0)});if(r&&r.ok){toast('生活開銷已儲存');loadFinance(true);}else toast('儲存失敗');}
+function numv(el){const n=parseFloat((el.innerText||'').replace(/[^0-9.\-]/g,''));return isFinite(n)?n:0;}
+
+// ===== 記帳分析（JARVIS HUD 風格）=====
+let fan=null;
+const CATCOL={'餐飲':'#ff7eb6','交通':'#00e5ff','購物':'#ffcf5c','娛樂':'#8b5cff','居家':'#00ffa3','醫療':'#ff4d6d','學習':'#46d3ff','訂閱':'#b69bff','人情':'#ff9f43','其他':'#7d93b3'};
+const ccol=c=>CATCOL[c]||'#7d93b3';
+async function loadAnalysis(){const d=await get('/api/finance/analysis');if(d&&d.ok){fan=d.data;renderQuick();renderAnalysis();renderCatBudget();}}
+// 快速記帳
+function renderQuick(){if(!fan)return;
+  const freq=fan.frequent||[];
+  const btns=freq.length?freq.map(f=>`<button class="qbtn" onclick="quickExp('${esc(f.category)}',${f.amount})">${esc(f.category)}<b>$${fmt(f.amount)}</b></button>`).join(''):'<span style="color:var(--dim);font-size:13px">記幾筆後，這裡會自動帶出你常用的一鍵記帳</span>';
+  $('#fin-quick').innerHTML=`<h3><span class="ic">⚡</span>快速記帳</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:14px">${btns}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="color:var(--dim);font-size:13px">手動：</span>
+      <input id="qe-amt" type="number" placeholder="金額" style="width:88px">
+      <input id="qe-cat" placeholder="類別 例:午餐" style="width:120px" list="catlist">
+      <datalist id="catlist">${(fan.categories||[]).map(c=>'<option value="'+c+'">').join('')}</datalist>
+      <input id="qe-note" placeholder="備註(選填)" style="width:130px">
+      <button class="btn solid" onclick="quickExpManual()">＋ 記一筆</button>
+    </div>`;}
+async function quickExp(cat,amt){const r=await send('/api/expense','POST',{category:cat,amount:amt});
+  if(r&&r.ok){toast(r.text||('記好了 '+cat+' '+amt));await loadFinance(true);await loadAnalysis();}else toast('記帳失敗');}
+async function quickExpManual(){const amt=parseFloat(($('#qe-amt').value||'').replace(/[^0-9.]/g,''));if(!amt){toast('請填金額');return;}
+  const cat=($('#qe-cat').value||'其他').trim(),note=($('#qe-note').value||'').trim();
+  const r=await send('/api/expense','POST',{category:cat,amount:amt,note});
+  if(r&&r.ok){toast(r.text||'記好了');$('#qe-amt').value='';$('#qe-cat').value='';$('#qe-note').value='';await loadFinance(true);await loadAnalysis();}else toast('記帳失敗');}
+// 環形圖（發光）
+function donutSVG(data,size){const total=data.reduce((a,d)=>a+d.value,0)||1;const r=size/2-9,cx=size/2,cy=size/2,sw=15;let acc=0;
+  const segs=data.map(d=>{const frac=d.value/total;const a0=acc*2*Math.PI-Math.PI/2;acc+=frac;const a1=acc*2*Math.PI-Math.PI/2;
+    const large=frac>0.5?1:0;const x0=cx+r*Math.cos(a0),y0=cy+r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy+r*Math.sin(a1);
+    return `<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 ${large} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${ccol(d.label)}" stroke-width="${sw}" stroke-linecap="butt" style="filter:drop-shadow(0 0 3px ${ccol(d.label)})"/>`;}).join('');
+  return `<svg viewBox="0 0 ${size} ${size}" style="width:${size}px;height:${size}px">${segs}<circle cx="${cx}" cy="${cy}" r="${r-sw/2-3}" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1"/></svg>`;}
+// 消費分析
+function renderAnalysis(){if(!fan)return;const a=fan;
+  const up=a.mom_diff>0;const momTxt=a.last_month?`${up?'▲ 多花':'▼ 省下'} $${fmt(Math.abs(a.mom_diff))}（${a.mom_pct>=0?'+':''}${a.mom_pct}%）vs 上月`:'上月無資料可比';
+  // 月趨勢柱
+  const mx=Math.max(...a.monthly.map(m=>m.total),1);
+  const bars=a.monthly.map(m=>`<div class="mbar"><div class="bv">${m.total?'$'+fmt(m.total):''}</div><div class="bar" style="height:${Math.max(4,m.total/mx*90)}px;${m.month===a.month?'background:linear-gradient(180deg,var(--gold),rgba(255,207,92,.25));box-shadow:0 0 10px rgba(255,207,92,.4)':''}"></div><div class="bl">${m.month.slice(5)}月</div></div>`).join('');
+  // 分類環形 + 圖例
+  const cats=Object.entries(a.by_category).map(([label,value])=>({label,value}));
+  const ctot=cats.reduce((s,c)=>s+c.value,0)||1;
+  const donut=cats.length?donutSVG(cats,150):'';
+  const legend=cats.map(c=>`<div class="donutlg"><span class="dot" style="background:${ccol(c.label)};box-shadow:0 0 6px ${ccol(c.label)}"></span><span style="flex:1">${esc(c.label)}</span><span style="font-family:var(--mono);color:var(--dim)">$${fmt(c.value)} · ${Math.round(c.value/ctot*100)}%</span></div>`).join('');
+  const ins=(a.insights||[]).map(t=>`<div class="insight"><span>💡</span><span>${esc(t)}</span></div>`).join('');
+  $('#fin-analysis').innerHTML=`<h3><span class="ic">📊</span>消費分析</h3>
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px">
+      <span style="font-family:var(--head);font-size:30px;font-weight:700;color:#eaf6ff;text-shadow:0 0 16px rgba(0,229,255,.3)">$${fmt(a.this_month)}</span>
+      <span style="font-size:13px;color:${up?'var(--bad)':(a.mom_diff<0?'var(--ok)':'var(--dim)')}">${momTxt}</span>
+      <span style="font-size:12px;color:var(--dimer)">本月生活開銷</span></div>
+    <div style="display:flex;align-items:flex-end;gap:8px;height:120px;margin:16px 0;padding:0 4px">${bars}</div>
+    ${cats.length?`<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:8px;border-top:1px solid var(--line);padding-top:16px">
+       <div style="position:relative">${donut}<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:10px;color:var(--dim)">本月</div><div style="font-family:var(--head);font-size:15px;color:#eaf6ff">$${fmt(a.this_month)}</div></div></div>
+       <div style="flex:1;min-width:200px">${legend}</div></div>`:''}
+    ${ins?'<div style="margin-top:16px">'+ins+'</div>':''}`;}
+// 分類預算
+function renderCatBudget(){if(!fan)return;const cs=fan.category_status||[];
+  const rows=cs.filter(c=>c.spent>0||c.budget>0).map(c=>{
+    const pct=c.budget?Math.min(100,c.pct):0;const over=c.budget&&c.spent>c.budget;
+    const col=over?'var(--bad)':(c.pct>=80?'var(--warn)':ccol(c.category));
+    return `<div style="margin-bottom:13px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${ccol(c.category)};margin-right:6px"></span>${esc(c.category)}</span>
+        <span style="font-family:var(--mono);color:var(--dim)">$${fmt(c.spent)}${c.budget?' / <span class="txt" contenteditable onblur="saveCatBudget(\''+esc(c.category)+'\',this)" style="color:var(--gold);outline:none">'+fmt(c.budget)+'</span>':' <button class="btn sm" onclick="setCatBudget(\''+esc(c.category)+'\')">設預算</button>'}</span>
+      </div>${c.budget?`<div class="hudbar"><div style="width:${pct}%;background:${col};box-shadow:0 0 10px ${col}"></div></div>`:''}</div>`;}).join('');
+  $('#fin-catbudget').innerHTML=`<h3><span class="ic">🎯</span>分類預算</h3>
+    ${rows||'<div class="empty">記帳後這裡會顯示各分類花費；按「設預算」可設每類上限</div>'}
+    <div style="margin-top:6px"><button class="btn" onclick="addCatBudget()">＋ 為某分類設預算</button></div>`;}
+async function saveCatBudget(cat,el){const v=numv(el);const r=await send('/api/finance/category_budget','POST',{category:cat,amount:v});if(r&&r.ok){toast(cat+' 預算已設');loadAnalysis();}}
+function setCatBudget(cat){const v=prompt(cat+' 每月預算：');if(v===null)return;send('/api/finance/category_budget','POST',{category:cat,amount:parseFloat(v)||0}).then(()=>{toast('已設定');loadAnalysis();});}
+function addCatBudget(){const cat=prompt('哪個分類？('+(fan.categories||[]).join('/')+')');if(!cat)return;setCatBudget(cat.trim());}
+
+async function loadFunctions(){const d=await get('/api/functions');if(!d)return;
+  const map={get_weather_free:'查天氣',play_music_on_computer:'放音樂',control_music:'控制音樂',set_reminder:'設提醒',add_expense:'記帳',query_reminders:'查提醒',query_expenses:'查花費',set_timer:'計時器',get_news:'查新聞',add_todo:'加待辦',list_todo:'查待辦',convert_currency:'匯率換算',dispatch_task:'派任務研究',dance:'跳舞',save_to_desktop:'存檔到桌面',find_nearby:'找附近地點',build_feature:'自己長新功能',do_on_computer:'操作你的電腦',change_role:'切換角色',remember_fact:'記住事情',handle_exit_intent:'結束對話'};
+  $('#skill-tools').innerHTML=d.tools.map(t=>`<span class="pill"><span class="d" style="background:var(--ok);box-shadow:0 0 7px var(--ok)"></span>${esc(map[t.name]||t.desc||t.name)}</span>`).join('');
+  $('#skill-dev').innerHTML=(d.device_tools||[]).map(t=>`<span class="pill"><span class="d" style="background:var(--vio);box-shadow:0 0 7px var(--vio)"></span>${esc((''+t).replace(/\(.*/,''))}</span>`).join('');}
+
+let liveOn=false,liveTimer=null;
+async function loadLive(){const d=await get('/api/live');if(d){liveOn=d.live;reflectLive();}}
+function reflectLive(){$('#live-btn').textContent=liveOn?'■ 停止':'▶ 開始';$('#live-badge').style.display=liveOn?'flex':'none';$('#live-hint').style.display=liveOn?'none':'block';
+  if(liveOn){if(!liveTimer)liveTimer=setInterval(refreshLive,1000);refreshLive();}else if(liveTimer){clearInterval(liveTimer);liveTimer=null;}}
+function refreshLive(){const im=$('#live-img');im.onerror=()=>im.removeAttribute('src');im.src='/api/camera?t='+Date.now();}
+async function toggleLive(){liveOn=!liveOn;await send('/api/live','POST',{on:liveOn});reflectLive();toast(liveOn?'鏡頭已開':'鏡頭已關');}
+
+function setGauge(id,frac){const el=$(id);if(!el)return;const C=214;el.style.strokeDashoffset=C-C*Math.max(0,Math.min(1,frac));}
+async function loadStatus(){const d=await get('/api/status');
+  if(!d){$('#hstatus').textContent='控制台離線';if($('#coreSub'))$('#coreSub').textContent='連不到後台';
+    if($('#sys-services'))$('#sys-services').innerHTML='<div class="empty">⚠ 連不到後台</div>';
+    if($('#home-services'))$('#home-services').innerHTML='<div class="empty">⚠ 連不到後台</div>';return;}
+  const up=Object.values(d.services).filter(Boolean).length,tot=Object.keys(d.services).length;
+  const ka=(d.keys&&d.keys.active)||0,kt=(d.keys&&d.keys.total)||0;
+  const cm=((modelData&&modelData.current)||'—').replace('gemini-','');
+  const allOk=up===tot&&ka>0;
+  const health=tot?Math.round(up/tot*100):100;
+  $('#hstatus').textContent='Jarvis 在線運作中';
+  // HUD 中央狀態
+  if($('#coreSub'))$('#coreSub').textContent=allOk?'SYSTEM ONLINE · 一切正常':'⚠ '+up+'/'+tot+' 服務正常';
+  // 三個量表
+  setGauge('#g-svc',tot?up/tot:1);if($('#g-svc-n'))$('#g-svc-n').textContent=up;if($('#hud-svc-lb'))$('#hud-svc-lb').textContent=up+' / '+tot;
+  setGauge('#g-key',kt?ka/kt:0);if($('#g-key-n'))$('#g-key-n').textContent=ka;if($('#hud-key-lb'))$('#hud-key-lb').textContent=ka+' / '+kt;
+  setGauge('#g-health',health/100);if($('#g-health-n'))$('#g-health-n').textContent=health+'%';
+  if($('#hud-health-lb')){$('#hud-health-lb').textContent=allOk?'運作中':'需注意';$('#hud-health-lb').style.color=allOk?'var(--ok)':'var(--warn)';}
+  if($('#hud-model'))$('#hud-model').textContent=cm+' ▾';
+  // 系統頁的舊式服務列表
+  if($('#sys-services'))$('#sys-services').innerHTML='<h3><span class="ic">🔌</span>後台服務</h3>'+Object.entries(d.services).map(([k,v])=>
+   `<div class="svc"><span class="d ${v?'up':'down'}"></span><span class="nm">${esc(k)}</span><span class="st" style="color:${v?'var(--ok)':'var(--bad)'}">${v?'正常':'離線'}</span></div>`).join('');
+  // 首頁服務晶片格（2欄）
+  if($('#home-services'))$('#home-services').innerHTML='<h3><span class="ic">🔌</span>後台服務 <span style="margin-left:auto;font-size:12px;color:var(--dim);font-weight:400">'+up+'/'+tot+' 正常</span></h3><div class="svcg">'+Object.entries(d.services).map(([k,v])=>
+   `<div class="svcc"><span class="sdot ${v?'up':'down'}"></span><span class="snm">${esc(k)}</span><span class="sst" style="color:${v?'var(--ok)':'var(--bad)'}">${v?'正常':'離線'}</span></div>`).join('')+'</div>';
+  loadKeys();loadModel();}
+// HUD 時鐘（每秒跳）
+function tickHudClock(){const t=$('#hud-time');if(!t)return;const n=new Date();
+  const p=x=>String(x).padStart(2,'0');
+  t.textContent=p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds());
+  const wd=['日','一','二','三','四','五','六'][n.getDay()];
+  const dt=$('#hud-date');if(dt)dt.textContent=`${n.getFullYear()}/${p(n.getMonth()+1)}/${p(n.getDate())} 週${wd}`;}
+setInterval(tickHudClock,1000);tickHudClock();
+async function loadKeys(){const d=await get('/api/keys');if(!d)return;const ks=d.keys||[];const act=ks.filter(k=>k.status==='active').length;const now=Date.now()/1000;
+  $('#sys-keys').innerHTML='<h3><span class="ic">🔑</span>API 金鑰（共 '+ks.length+' 把，可用 '+act+'）</h3>'+
+   '<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(155px,1fr))">'+ks.map(k=>{
+     const ok=k.status==='active',cd=(!ok&&k.available_at)?Math.max(0,Math.round(k.available_at-now)):0;
+     return `<div class="svc" style="margin:0;${k.current?'border-color:var(--cy)':''}"><span class="d ${ok?'up':'down'}"></span><div style="flex:1"><div style="font-family:var(--mono);font-size:12px">#${k.index} ${esc(k.preview||'')}</div><div style="font-size:11px;color:${ok?'var(--ok)':'var(--warn)'}">${ok?(k.current?'使用中':'待命'):'冷卻 '+cd+'s'}</div></div></div>`;
+   }).join('')+'</div>';}
+let modelData=null;
+async function loadModel(){const d=await get('/api/model');if(!d)return;modelData=d;$('#hmodel').textContent=(d.current||'?').replace('gemini-','');
+  $('#sys-model').innerHTML='<h3><span class="ic">🧠</span>對話模型（點一下切換，立即生效）</h3>'+
+   '<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(225px,1fr))">'+(d.available||[]).map(m=>{const on=m.id===d.current;
+     return `<div class="model-card ${on?'on':''}" onclick="switchModel('${m.id}')"><div style="display:flex;justify-content:space-between;align-items:center"><b style="color:${on?'var(--cy)':'var(--txt)'};font-size:15px">${esc(m.label)}</b>${on?'<span style="font-size:11px;color:var(--cy)">● 使用中</span>':''}</div><div style="font-size:12px;color:var(--dim);margin-top:5px">${esc(m.note||'')}</div></div>`;
+   }).join('')+'</div>';}
+// 標題列模型下拉（任何頁都能切換）
+function toggleModelMenu(e){if(e){e.stopPropagation();}const menu=$('#model-menu');
+  if(menu.style.display==='block'){menu.style.display='none';return;}
+  if(!modelData||!modelData.available){toast('模型清單載入中…');loadModel();return;}
+  const cur=modelData.current;
+  menu.innerHTML='<div style="font-size:11px;color:var(--dim);padding:4px 10px 7px">切換對話模型（立即生效，不用重啟）</div>'+modelData.available.map(m=>{const on=m.id===cur;
+    return `<div onclick="pickModel('${m.id}')" style="padding:9px 12px;border-radius:9px;cursor:pointer;${on?'background:rgba(0,229,255,.13)':''}" onmouseover="this.style.background='rgba(0,229,255,.08)'" onmouseout="this.style.background='${on?'rgba(0,229,255,.13)':'transparent'}'">
+      <div style="display:flex;justify-content:space-between;align-items:center"><b style="color:${on?'var(--cy)':'var(--txt)'};font-size:13.5px">${esc(m.label)}</b>${on?'<span style="font-size:10px;color:var(--cy)">● 使用中</span>':''}</div>
+      <div style="font-size:11px;color:var(--dim);margin-top:2px">${esc(m.note||'')}</div></div>`;}).join('');
+  const r=$('#model-pill').getBoundingClientRect();
+  menu.style.top=(r.bottom+7)+'px';menu.style.left=Math.max(8,r.left-30)+'px';
+  menu.style.display='block';}
+async function pickModel(id){$('#model-menu').style.display='none';await switchModel(id);}
+document.addEventListener('click',e=>{const menu=$('#model-menu'),pill=$('#model-pill');
+  if(menu&&menu.style.display==='block'&&!menu.contains(e.target)&&pill&&!pill.contains(e.target))menu.style.display='none';});
+async function switchModel(id){const r=await send('/api/model','POST',{model:id});if(r&&r.ok){toast('✅ 已切換到 '+id.replace('gemini-',''));loadModel();}else toast('切換失敗');}
+
+async function loadPending(){const d=await get('/api/pending');if(!d)return;const ps=d.pending||[];
+  const bd=$('#navbadge');bd.textContent=ps.length;bd.classList.toggle('show',ps.length>0);
+  $('#approvals').innerHTML=ps.map(p=>
+   `<div class="panel" style="margin:0;border-color:var(--warn);box-shadow:0 0 26px rgba(255,176,46,.16)">
+      <div style="font-size:12px;color:var(--warn);font-weight:700;margin-bottom:8px">🔔 Jarvis 想做這件事，要你確認</div>
+      <div style="margin-bottom:13px;line-height:1.5">${esc(p.task)}</div>
+      <div style="display:flex;gap:9px"><button class="btn solid" style="flex:1" onclick="approve(${p.id},'approve')">✓ 確認</button><button class="btn danger" onclick="approve(${p.id},'reject')">✕ 拒絕</button></div>
+   </div>`).join('');}
+async function approve(id,dec){const r=await send('/api/approve','POST',{id,decision:dec});if(r&&r.ok)toast(dec==='approve'?'已確認，開始執行':'已拒絕');loadPending();}
+
+async function loadAll(){await Promise.allSettled([loadHome(),loadChat(),loadMemory(),loadRules(),loadReminders(),loadTodos(),loadFunctions(),loadLive(),loadStatus(),loadPending()]);
+  loadFinance();}  // 背景抓財務（含股價，~2s）→ 填首頁財務一覽，不擋其他載入
+loadAll();setInterval(loadStatus,15000);setInterval(loadPending,12000);
+// 財務自動更新：開盤時每60秒、休市每150秒，靜默更新（不閃「載入中」），不管你在哪一頁都更新。
+// 自我排程：每次刷新後依當下開盤狀態決定下次間隔，市場一開盤就自動切到快檔。
+function scheduleFinRefresh(){
+  const open=fin.pf&&fin.pf.market_open;
+  setTimeout(async()=>{
+    const ae=document.activeElement;
+    const editing=ae&&(ae.isContentEditable||ae.tagName==='INPUT'||ae.tagName==='SELECT');
+    if(fin.ov&&!editing){try{await loadFinance(true,true);}catch(e){}}  // 正在編輯就跳過，免得洗掉你打的字
+    scheduleFinRefresh();
+  }, open?30000:150000);
+}
+scheduleFinRefresh();
+
+function flare(txt,c){const el=$('#hlink');el.innerHTML=txt;el.style.color=c||'var(--cy)';el.style.borderColor=c||'var(--line2)';
+  $('.coredot').style.background=c||'var(--cy)';$('.coredot').style.boxShadow='0 0 16px '+(c||'var(--cy)');
+  clearTimeout(window._f);window._f=setTimeout(()=>{el.innerHTML='💬 待命中';el.style.color='var(--dim)';el.style.borderColor='var(--line)';$('.coredot').style.background='var(--cy)';$('.coredot').style.boxShadow='0 0 14px var(--cy)';},6000);}
+function connectStream(){try{const es=new EventSource('/api/stream');
+  es.onmessage=ev=>{let m;try{m=JSON.parse(ev.data)}catch(e){return}
+    if(m.type==='listening')flare('👂 正在聆聽…','#ffb02e');
+    else if(m.type==='engaged')flare('👂 正在聽'+(m.data?'：'+esc(m.data):''),'#ffb02e');
+    else if(m.type==='chat'){flare('✓ 已同步','#00ffa3');loadChat();loadHome();}
+    else if(m.type==='approval'){flare('🔔 有事要你確認','#ffb02e');loadPending();toast('🔔 有任務要你確認');}
+    else if(m.type==='finance'){flare('💰 財務已更新','#ffcf5c');if(m.data)toast('💰 '+m.data);if(fin.ov)loadFinance(true);}
+    else if(m.type==='memory'){flare('🧠 記憶已更新','#8b5cff');toast('🧠 新增記憶'+(m.data?'：'+esc(m.data):''));loadMemory();}
+    else if(m.type==='reminder'){flare('⏰ 提醒已更新','#00e5ff');toast('⏰ 新增提醒'+(m.data?'：'+esc(m.data):''));loadReminders();}
+    else if(m.type==='todo'){flare('✅ 待辦已更新','#00ffa3');loadTodos();}};
+  es.onerror=()=>setTimeout(connectStream,3000);}catch(e){}}
+connectStream();
+
+// 背景粒子
+(function(){const c=$('#bgfx'),x=c.getContext('2d');let w,h,ps=[];
+function rs(){w=c.width=innerWidth;h=c.height=innerHeight;ps=Array.from({length:42},()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,r:Math.random()*1.3+.4}))}
+rs();addEventListener('resize',rs);
+(function loop(){x.clearRect(0,0,w,h);for(const p of ps){p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>w)p.vx*=-1;if(p.y<0||p.y>h)p.vy*=-1;x.beginPath();x.arc(p.x,p.y,p.r,0,7);x.fillStyle='rgba(0,229,255,.38)';x.fill();}
+for(let i=0;i<ps.length;i++)for(let j=i+1;j<ps.length;j++){const a=ps[i],b=ps[j],d=Math.hypot(a.x-b.x,a.y-b.y);if(d<115){x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.strokeStyle='rgba(0,229,255,'+(.07*(1-d/115))+')';x.lineWidth=.5;x.stroke();}}
+requestAnimationFrame(loop)})();})();
+</script>
+</body>
+</html>

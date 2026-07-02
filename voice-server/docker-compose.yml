@@ -1,0 +1,44 @@
+# Docker安装Server
+
+version: '3'
+services:
+  xiaozhi-esp32-server:
+    image: ghcr.nju.edu.cn/xinnan-tech/xiaozhi-esp32-server:server_latest
+    container_name: xiaozhi-esp32-server
+    restart: always
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      # 0=關閉主動桌面視覺輪詢（每15分拍照+Gemini會吃資源、偶爾干擾音訊）。要主動關心再開回 900。
+      - HERMES_DESK_VISION_SEC=0
+      - TZ=Asia/Taipei
+    ports:
+      # ws服务端
+      - "8000:8000"
+      # http服务的端口，用于简单OTA接口(单服务部署)，以及视觉分析接口
+      - "8003:8003"
+    volumes:
+      - ./patches/edge.py:/opt/xiaozhi-esp32-server/core/providers/tts/edge.py
+      - ./patches/gemini_asr.py:/opt/xiaozhi-esp32-server/core/providers/asr/gemini_asr.py
+      - ./patches/textUtils.py:/opt/xiaozhi-esp32-server/core/utils/textUtils.py
+      - ./patches/vision_handler.py:/opt/xiaozhi-esp32-server/core/api/vision_handler.py
+      - ./patches/hermes_tools.py:/opt/xiaozhi-esp32-server/plugins_func/functions/hermes_tools.py
+      - ./patches/get_weather_free.py:/opt/xiaozhi-esp32-server/plugins_func/functions/get_weather_free.py
+      - ./patches/hermes_rag.py:/opt/xiaozhi-esp32-server/core/providers/memory/hermes_rag/hermes_rag.py
+      - ./patches/control_music.py:/opt/xiaozhi-esp32-server/plugins_func/functions/control_music.py
+      - ./patches/remember_fact.py:/opt/xiaozhi-esp32-server/plugins_func/functions/remember_fact.py
+      - ./patches/forget_memory.py:/opt/xiaozhi-esp32-server/plugins_func/functions/forget_memory.py
+      - ./patches/cancel_reminder.py:/opt/xiaozhi-esp32-server/plugins_func/functions/cancel_reminder.py
+      - ./patches/delete_expense.py:/opt/xiaozhi-esp32-server/plugins_func/functions/delete_expense.py
+      - ./patches/complete_todo.py:/opt/xiaozhi-esp32-server/plugins_func/functions/complete_todo.py
+      - ./patches/play_music_on_computer.py:/opt/xiaozhi-esp32-server/plugins_func/functions/play_music_on_computer.py
+      - ./patches/mcp_handler.py:/opt/xiaozhi-esp32-server/core/providers/tools/device_mcp/mcp_handler.py
+      - ./patches/connection.py:/opt/xiaozhi-esp32-server/core/connection.py
+      - ./patches/sendAudioHandle.py:/opt/xiaozhi-esp32-server/core/handle/sendAudioHandle.py
+      - ./patches/opus_encoder_utils.py:/opt/xiaozhi-esp32-server/core/utils/opus_encoder_utils.py
+      - ./patches/silero.py:/opt/xiaozhi-esp32-server/core/providers/vad/silero.py
+      - ./data/agent-base-prompt.txt:/opt/xiaozhi-esp32-server/agent-base-prompt.txt
+      # 配置文件目录
+      - ./data:/opt/xiaozhi-esp32-server/data
+      # 模型文件挂接，很重要
+      - ./models/SenseVoiceSmall/model.pt:/opt/xiaozhi-esp32-server/models/SenseVoiceSmall/model.pt

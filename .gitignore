@@ -1,0 +1,18 @@
+# ── 私人資料:絕不入庫 ──
+brain/config/*.json
+!brain/config/*.example.json
+!brain/config/tw_calendar_2026.json
+brain/memory/
+brain/memories/
+brain/logs/
+.env
+*.env
+voice-server/data/.config.yaml
+# 金鑰/憑證
+*keys*.json
+*token*
+*credentials*
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
