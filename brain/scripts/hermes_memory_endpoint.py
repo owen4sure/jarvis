@@ -1433,7 +1433,7 @@ def _focused_finance_answer(q: str, d: dict, pf: dict):
     # 若上游為了省速度沒抓股價(net_worth 會變成只剩現金甚至 0)→ 這裡強制重算一次，
     # 不再靠「有沒有猜中關鍵字」(那就是反覆算成 0 的根因)。
     if any(k in q for k in ("資產", "淨值", "身家", "目標", "達標", "存到", "缺口", "賺", "投資", "報酬",
-                            "多存", "再存", "想存", "存錢", "存更多")):
+                            "多存", "再存", "想存", "存錢", "存更多", "大盤", "股票", "持股", "市值")):
         if not (pf and pf.get("items")) or nw <= 0:
             d = _w.overview(with_portfolio=True)
             pf = d.get("portfolio", {}) or {}
@@ -1591,6 +1591,25 @@ def _focused_finance_answer(q: str, d: dict, pf: dict):
                 return (f"{_nm}（{_sym}）你目前{'賺' if _r >= 0 else '虧'}了 {abs(_r)} 元"
                         f"（報酬率 {_it.get('retpct')}%、市值 {int(_it.get('value') or 0)} 元，"
                         f"今天{'漲' if _tdy >= 0 else '跌'} {abs(_tdy)} 元）。（照唸這些數字。）")
+
+    # 5h) 今天贏大盤了嗎（玩槓桿最該問的問題:超額報酬）— 拿 0050/SPY 當台美股基準即時比
+    if pf.get("items") and any(k in q for k in ("贏大盤", "輸大盤", "跟大盤", "比大盤", "大盤比", "贏過大盤", "有沒有贏")):
+        try:
+            _my = float(pf.get("total_todaypct") or 0)
+            _bm = []
+            for _sym, _lbl in (("0050", "台股大盤(0050)"), ("SPY", "美股大盤(SPY)")):
+                _q = _w._quote(_sym)
+                _p, _pv = _q.get("price"), _q.get("prev")
+                if _p and _pv:
+                    _bm.append((_lbl, round((_p - _pv) / _pv * 100, 2)))
+            if _bm:
+                _cmp = "、".join(f"{l} {p:+}%" for l, p in _bm)
+                _beat = all(_my > p for _, p in _bm)
+                _lose = all(_my < p for _, p in _bm)
+                _verdict = "全面贏過大盤" if _beat else ("輸給大盤" if _lose else "跟大盤互有勝負")
+                return (f"你的組合今天 {_my:+}%,{_cmp} → 今天{_verdict}。（照唸這些數字。）")
+        except Exception:
+            pass
 
     # 5b) 最賺/最虧的股票（要在 #5 總報酬之前，否則「最賺」的「賺」會被搶走）
     if pf.get("items") and any(k in q for k in ("最賺", "最會賺", "賺最多", "最虧", "虧最多", "賠最多",

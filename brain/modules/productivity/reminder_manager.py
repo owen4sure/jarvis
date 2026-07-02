@@ -194,8 +194,13 @@ def get_due_reminders(now=None):
 
         # 用「發出時間」(事件時間 − 提早分鐘) 比對。【關鍵修正】不再只比對「剛好那一分鐘」——
         # daemon 重啟/負載/錯過那分鐘就永遠不響。改成「到點，或過點 30 分鐘內」都補響(只響一次)。
+        # 【跨午夜修正】once 提醒發出時間在 23:30 後(例如事件 00:10 提早 30 分 → 23:50)，
+        # 00:05 檢查時 cur(5)<ft(1430) 會被判「還沒到」→ 該日期永遠不響。加 wrap:
+        # 午夜後 30 分內、ft 在午夜前 30 分內 → 視為補響(僅 once,避免 daily 跨日重複響)。
         ft = _to_min(_fire_time(r))
-        if ft < 0 or cur < ft or (cur - ft) > 30:
+        _in_window = (0 <= cur - ft <= 30)
+        _wrap = (rep.startswith("once:") and cur < 30 and ft > 1410 and (cur + 1440 - ft) <= 30)
+        if ft < 0 or not (_in_window or _wrap):
             remaining.append(r)
             continue
 

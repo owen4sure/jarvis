@@ -154,6 +154,11 @@ def save_embedding(speaker_id: str, new_emb: np.ndarray) -> None:
         except Exception:
             count = 0
             acc = np.zeros_like(new_emb)
+    # 【防稀釋】running-mean 的 count 無上限的話,樣本一多、新樣本權重趨近 0,聲紋永遠修不動;
+    # 上限 40 → 新樣本至少保有 ~2.5% 權重,聲音隨時間變化(感冒/設備換)也能慢慢跟上。
+    if count > 40:
+        acc = acc * (40.0 / count)
+        count = 40
     acc = acc + new_emb
     count += 1
     mean = acc / count
@@ -238,6 +243,11 @@ async def identify(
             c2 = 0
         if c2 >= target:
             _FORCE_ENROLL.pop(sid, None)
+            continue
+        # 【防污染】聲紋已成形(≥8樣本)後,跟本人相似度過低(<0.30)的音訊八成是別人/電視,
+        # 不能學進去(會把主人聲紋越拉越歪)。養成期(<8)不設限,否則第一筆永遠進不去。
+        if c2 >= 8 and sid == best_id and best_score < 0.30:
+            log.info("Force-enroll skip(疑似他人聲音) %s score=%.2f", sid, best_score)
             continue
         try:
             save_embedding(sid, emb)
