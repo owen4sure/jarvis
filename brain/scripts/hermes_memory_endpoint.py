@@ -851,6 +851,43 @@ async def reminder(req: Request):
 _LAST_EXPENSE: dict = {}  # (amount, note) -> ts，90 秒內同筆視為重複(防確定性攔截與模型雙記)
 
 
+# ---------- 智能分類（記帳唯一收口點:語音/Telegram/reconciler/dashboard 全部經過這裡）----------
+_CANON_CATS = ("餐飲", "超商", "超市", "交通", "購物", "娛樂", "訂閱", "醫療", "其他")
+_CAT_RULES = [  # 順序有意義:商家優先於品項(在 7-11 買咖啡仍算超商)
+    ("超商", ("7-11", "711", "7-eleven", "小七", "全家", "family", "萊爾富", "ok超商", "超商", "便利商店")),
+    ("超市", ("美廉社", "美聯社", "全聯", "家樂福", "大潤發", "costco", "好市多", "頂好", "超市", "楓康", "愛買")),
+    ("訂閱", ("netflix", "spotify", "youtube premium", "icloud", "chatgpt", "claude", "訂閱", "會員費", "月費")),
+    ("交通", ("捷運", "公車", "高鐵", "台鐵", "火車", "uber", "計程車", "小黃", "加油", "停車", "悠遊卡", "油錢", "機票", "renting", "goshare", "wemo", "irent")),
+    ("醫療", ("診所", "醫院", "掛號", "藥局", "牙醫", "眼科", "看醫生", "藥")),
+    ("娛樂", ("電影", "遊戲", "ktv", "演唱會", "展覽", "桌遊", "steam", "switch")),
+    ("餐飲", ("早餐", "午餐", "中餐", "晚餐", "宵夜", "早午餐", "brunch", "麥當勞", "肯德基", "摩斯", "subway",
+              "星巴克", "路易莎", "便當", "火鍋", "拉麵", "壽司", "鹹酥雞", "鹽酥雞", "雞排", "水餃", "滷味",
+              "咖啡", "手搖", "飲料", "奶茶", "紅茶", "綠茶", "啤酒", "餐", "飯", "麵", "吃", "喝", "茶")),
+    ("購物", ("蝦皮", "momo", "pchome", "淘寶", "amazon", "衣服", "鞋", "3c", "日用品", "屈臣氏", "康是美", "無印", "uniqlo", "ikea")),
+]
+
+
+def _smart_category(category: str, note: str) -> tuple:
+    """把亂七八糟的分類(模型常把品項當分類:「午餐」「7-11」「茶碗蒸」)正規化成固定類別。
+    回 (正規分類, 修正後note)——原本的品項名不丟,收進 note。"""
+    cat = (category or "").strip()
+    nt = (note or "").strip()
+    if cat in _CANON_CATS and cat != "其他":
+        return cat, nt          # 已是正規分類 → 不動
+    blob = (cat + " " + nt).lower()
+    for canon, kws in _CAT_RULES:
+        if any(k in blob for k in kws):
+            # 原分類是品項名(非正規)→ 移進 note 保留資訊
+            if cat and cat not in _CANON_CATS and cat not in nt:
+                nt = (nt + (" " if nt else "") + cat).strip() if nt != cat else nt
+                if not note:
+                    nt = cat
+            return canon, nt
+    if cat and cat not in _CANON_CATS:
+        return "其他", (nt if nt else cat)   # 認不出 → 其他,但品項留在 note
+    return (cat or "其他"), nt
+
+
 @app.post("/expense")
 async def expense(req: Request):
     """記帳：寫入 config/expenses.json。"""
@@ -872,6 +909,8 @@ async def expense(req: Request):
         category = _t2t(_cat) if isinstance(_cat, str) and _cat.strip() else "其他"
         _note = (b or {}).get("note", "")
         note = _t2t(_note) if isinstance(_note, str) else ""
+        # 【智能分類】模型常把品項當分類(「午餐」「7-11」)→ 正規化成固定類別,品項保留進 note
+        category, note = _smart_category(category, note)
         # 回溯記帳：使用者說「昨天/前天/X號花了」時帶絕對日期 YYYY-MM-DD,沒帶就記今天。
         _date = str((b or {}).get("date", "")).strip()[:10]
         date = _date if re.match(r"^\d{4}-\d{2}-\d{2}$", _date) else None
@@ -1497,7 +1536,7 @@ def _focused_finance_answer(q: str, d: dict, pf: dict):
                 f"{str(big.get('date', ''))[:10]}）。（照唸這些數字。）")
 
     # 1e) 某類別本月花多少（餐飲/交通/娛樂...）
-    _hit_cat = next((c for c in ("餐飲", "交通", "娛樂", "購物", "醫療", "生活") if c in q), None)
+    _hit_cat = next((c for c in ("餐飲", "超商", "超市", "交通", "娛樂", "購物", "訂閱", "醫療", "生活") if c in q), None)
     if _hit_cat and any(k in q for k in ("花", "多少", "花費", "消費", "用")):
         items = [e for e in _mon_items if str(e.get("category", "")) == _hit_cat]
         tot = int(sum(float(e.get("amount") or 0) for e in items))

@@ -541,13 +541,13 @@ body.privacy .pv:hover{filter:blur(0)}
       <div class="panel" id="money-hero"><div class="empty">載入中…</div></div>
       <div class="grid g4" id="money-stats" style="margin-bottom:18px"></div>
       <div class="panel" id="fin-quick"></div>
-      <div class="panel" id="fin-analysis"></div>
+      <div class="panel" id="fin-expenses"></div>
       <div class="panel" id="fin-spendpie"></div>
+      <div class="panel" id="fin-analysis"></div>
       <div class="panel" id="fin-catbudget"></div>
       <div class="panel" id="fin-budget"></div>
       <div class="panel" id="fin-income"></div>
       <div class="panel" id="fin-fixed"></div>
-      <div class="panel" id="fin-expenses"></div>
     </section>
 
     <!-- 投資（持股即時報酬）-->
@@ -1234,7 +1234,7 @@ const ccol=c=>CATCOL[c]||'#7d93b3';
 async function loadAnalysis(){const d=await get('/api/finance/analysis');if(d&&d.ok){fan=d.data;renderQuick();renderAnalysis();renderCatBudget();}}
 // 快速記帳
 function renderQuick(){if(!fan)return;
-  const freq=fan.frequent||[];
+  const freq=(fan.frequent||[]).filter(f=>f.category!=='之前花費');  // 調整桶不是日常消費,不當快捷
   const btns=freq.length?freq.map(f=>`<button class="qbtn" onclick="quickExp('${esc(f.category)}',${f.amount})">${esc(f.category)}<b>$${fmt(f.amount)}</b></button>`).join(''):'<span style="color:var(--dim);font-size:13px">記幾筆後，這裡會自動帶出你常用的一鍵記帳</span>';
   $('#fin-quick').innerHTML=`<h3><span class="ic">⚡</span>快速記帳</h3>
     <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:14px">${btns}</div>
