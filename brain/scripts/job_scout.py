@@ -110,6 +110,66 @@ def _search_terms(default):
     return default
 
 
+def fetch_104():
+    """104 有 Cloudflare + SPA,API 爬不動 → 用 headless playwright 渲染搜尋頁後抽卡。
+    慢(整批約 10-20s)但每日排程是背景跑無妨。抓不到就回 [](絕不擋整個 scan)。
+    順便抓「外商公司」標籤 → is_foreign,幫投遞選中/英文履歷。"""
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return []
+    out, seen = [], set()
+    _JS = r"""() => {
+      const cards = document.querySelectorAll(".info-container, [class*='vue-recycle']");
+      const res = [];
+      cards.forEach(card => {
+        const a = card.querySelector("a[href*='/job/']");
+        if (!a) return;
+        const title = (a.innerText || "").trim();
+        if (!title || title.length > 60) return;
+        const comp = card.querySelector("a[href*='/company/']:not([href*='/company/search'])");
+        const loc = card.querySelector("a[href*='area=']");
+        let sal = "";
+        card.querySelectorAll("a[href*='sr='], a[href*='joblist_tag']").forEach(x => {
+          const t = (x.innerText || "").trim();
+          if (/月薪|年薪|待遇|面議|時薪/.test(t) && !sal) sal = t;
+        });
+        const foreign = /外商公司/.test(card.innerText || "");
+        res.push({title,
+                  company: (comp ? comp.innerText.trim() : ""),
+                  loc: (loc ? loc.innerText.trim() : ""),
+                  salary: sal, url: a.href.split("?")[0], is_foreign: foreign});
+      });
+      return res;
+    }"""
+    try:
+        with sync_playwright() as pw:
+            b = pw.chromium.launch(headless=True,
+                                   args=["--disable-blink-features=AutomationControlled"])
+            pg = b.new_page(user_agent=UA)
+            for term in _search_terms(["AI 產品", "AI 導入"]):
+                try:
+                    q = urllib.parse.quote(term)
+                    pg.goto(f"https://www.104.com.tw/jobs/search/?keyword={q}&order=16",
+                            timeout=40000)
+                    pg.wait_for_timeout(6000)   # 等 CF 過 + 卡渲染
+                    for j in pg.evaluate(_JS):
+                        u = j.get("url", "")
+                        if u and u not in seen and j.get("title"):
+                            seen.add(u)
+                            out.append({"source": "104", "title": j["title"],
+                                        "company": j.get("company", ""),
+                                        "loc": j.get("loc", ""), "salary": j.get("salary", ""),
+                                        "tags": [], "url": u,
+                                        "is_foreign": bool(j.get("is_foreign"))})
+                except Exception as e:
+                    print(f"[104:{term}] {e}", file=sys.stderr)
+            b.close()
+    except Exception as e:
+        print(f"[104] {e}", file=sys.stderr)
+    return out
+
+
 def fetch_yourator():
     out = []
     for term in _search_terms(["AI", "產品經理"]):
@@ -237,7 +297,7 @@ def llm_rerank(cands, disliked_titles):
 
 
 def run(push: bool):
-    jobs = fetch_yourator() + fetch_linkedin()
+    jobs = fetch_yourator() + fetch_linkedin() + fetch_104()
     # 同缺去重(兩源都有時保留先出現的)
     uniq = {}
     for j in jobs:

@@ -43,24 +43,27 @@ def _log(url, status, note=""):
     print(f"[{status}] {note}")
 
 
-def _resume_path(title=""):
-    """職缺標題含中文 → 中文履歷,否則英文履歷(都沒設就 None)。"""
+def _resume_path(title="", is_foreign=False):
+    """挑投遞用履歷:外商/英文職缺→英文履歷,台灣中文職缺→中文履歷。
+    優先序:is_foreign(104「外商公司」標籤)→ 英文;否則看標題語言(含中文→中文)。
+    只有一份時就用那份。"""
     try:
         p = json.load(open(JOB_PROFILE, encoding="utf-8"))
     except Exception:
         p = {}
     zh, en = p.get("resume_zh") or "", p.get("resume_en") or ""
-    prefer_zh = bool(re.search(r"[一-龥]", title))
+    # 外商 → 英文優先;否則標題含中文 → 中文優先
+    prefer_zh = (not is_foreign) and bool(re.search(r"[一-龥]", title))
     for cand in ([zh, en] if prefer_zh else [en, zh]):
         if cand and os.path.exists(os.path.expanduser(cand)):
             return os.path.expanduser(cand)
     return None
 
 
-def apply(url, title=""):
+def apply(url, title="", is_foreign=False):
     from playwright.sync_api import sync_playwright
     os.makedirs(PROFILE_DIR, exist_ok=True)
-    resume = _resume_path(title)
+    resume = _resume_path(title, is_foreign)
     with sync_playwright() as pw:
         ctx = pw.chromium.launch_persistent_context(
             PROFILE_DIR, headless=False, viewport={"width": 1280, "height": 900},
@@ -149,7 +152,8 @@ if __name__ == "__main__":
         sys.exit(1)
     u = sys.argv[1]
     t = sys.argv[2] if len(sys.argv) > 2 else ""
+    fgn = (len(sys.argv) > 3 and sys.argv[3] in ("1", "true", "foreign"))
     try:
-        apply(u, t)
+        apply(u, t, fgn)
     except Exception as e:
         _log(u, "error", str(e)[:120])

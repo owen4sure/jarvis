@@ -511,13 +511,23 @@ body.privacy .pv:hover{filter:blur(0)}
     <section class="page" id="p-jobs">
       <div class="ph"><div><h2>💼 工作雷達</h2><div class="desc">每天 12:35 自動掃 Yourator+LinkedIn，LLM 按你的履歷逐缺評適配分。✕ 掉的永不再出現、還會變成口味訊號讓之後推得更準。</div></div>
         <div><button class="btn" id="jobs-rescan" onclick="rescanJobs()">🔄 重新掃描</button></div></div>
-      <div class="panel" style="margin-bottom:12px"><h3><span class="ic">📄</span>我的履歷</h3>
-        <div style="font-size:12px;color:var(--dim);margin-bottom:8px">上傳你的履歷(PDF),AI 讀懂後就用它來配對、評分、深度分析——換人用只要換一份履歷。也是 LinkedIn 一鍵投遞會送出的檔案。</div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <input type="file" id="resume-file" accept=".pdf,.txt" style="font-size:12px;color:var(--dim)">
-          <button class="btn" id="resume-up" onclick="uploadResume()">⬆️ 上傳並讓 AI 讀懂</button>
-          <span class="msg" id="resume-msg" style="font-size:12px;color:#9fe"></span>
+      <div class="panel" style="margin-bottom:12px"><h3><span class="ic">📄</span>我的履歷（中文 + 英文各一份）</h3>
+        <div style="font-size:12px;color:var(--dim);margin-bottom:10px">上傳兩份:<b style="color:#9fe">中文履歷</b>投台灣公司、<b style="color:#9fe">英文履歷</b>投外商/英文職缺——一鍵投遞會自動挑對的那份(104 標「外商公司」或英文職缺→英文,台灣中文缺→中文)。AI 用你最新上傳的那份做配對評分。</div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap">
+          <div style="flex:1;min-width:240px">
+            <div style="font-size:12px;color:#9fe;font-weight:700;margin-bottom:4px">🇹🇼 中文履歷</div>
+            <input type="file" id="resume-file-zh" accept=".pdf,.txt" style="font-size:11px;color:var(--dim)">
+            <button class="btn sm" onclick="uploadResume('zh')" style="margin-top:4px">⬆️ 上傳中文</button>
+            <div id="slot-zh" style="font-size:11px;color:var(--dim);margin-top:4px">尚未上傳</div>
+          </div>
+          <div style="flex:1;min-width:240px">
+            <div style="font-size:12px;color:#9fe;font-weight:700;margin-bottom:4px">🌐 英文履歷</div>
+            <input type="file" id="resume-file-en" accept=".pdf,.txt" style="font-size:11px;color:var(--dim)">
+            <button class="btn sm" onclick="uploadResume('en')" style="margin-top:4px">⬆️ 上傳英文</button>
+            <div id="slot-en" style="font-size:11px;color:var(--dim);margin-top:4px">尚未上傳</div>
+          </div>
         </div>
+        <span class="msg" id="resume-msg" style="font-size:12px;color:#9fe;display:block;margin-top:8px"></span>
         <div id="resume-box" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(6,14,24,.5);border:1px solid color-mix(in srgb,var(--cy) 18%,#0a1622);border-radius:8px;font-size:12px;color:#cfe;line-height:1.7"></div>
       </div>
       <div class="panel" style="margin-bottom:12px"><h3><span class="ic">🎯</span>我要的工作條件</h3>
@@ -756,7 +766,7 @@ function jobCard(j,saved){
       <a href="${esc(j.url||'#')}" target="_blank" style="font-size:12px;color:var(--cy);text-decoration:none;border:1px solid color-mix(in srgb,var(--cy) 30%,transparent);border-radius:6px;padding:4px 12px;display:inline-block">查看職缺 →</a>
       <button onclick="saveJob(this)" data-key="${esc(key)}" style="font-size:12px;color:${isSaved?'#021':'#ffd76a'};background:${isSaved?'#ffcf5c':'none'};border:1px solid rgba(255,207,92,.45);border-radius:6px;padding:4px 12px;cursor:pointer">${isSaved?'★ 已追蹤':'☆ 關注'}</button>
       <button onclick="showJD(this)" data-key="${esc(key)}" style="font-size:12px;color:#ffcf5c;background:none;border:1px solid rgba(255,207,92,.35);border-radius:6px;padding:4px 12px;cursor:pointer">📄 看中文說明</button>
-      ${(j.source==='LinkedIn')?`<button onclick="applyJob(this)" data-url="${esc(j.url||'')}" data-title="${esc(j.title||'')}" style="font-size:12px;color:#3affa0;background:none;border:1px solid rgba(58,255,160,.35);border-radius:6px;padding:4px 12px;cursor:pointer">📨 幫我投遞</button>`:''}
+      ${(j.source==='LinkedIn')?`<button onclick="applyJob(this)" data-url="${esc(j.url||'')}" data-title="${esc(j.title||'')}" data-foreign="${j.is_foreign?'1':'0'}" style="font-size:12px;color:#3affa0;background:none;border:1px solid rgba(58,255,160,.35);border-radius:6px;padding:4px 12px;cursor:pointer">📨 幫我投遞</button>`:''}
       ${isSaved?`<button onclick="researchJob(this)" data-key="${esc(key)}" style="font-size:12px;color:#c9a3ff;background:none;border:1px solid rgba(155,139,255,.45);border-radius:6px;padding:4px 12px;cursor:pointer">🔬 深度分析</button>`:''}</div>
     <div class="jd-box" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(4,10,18,.7);border:1px solid color-mix(in srgb,var(--gold) 25%,#0a1622);border-radius:8px;font-size:12px;color:#dce8f5;line-height:1.75;white-space:pre-wrap;overscroll-behavior:contain"></div>
     <div class="research-box" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(12,8,24,.7);border:1px solid rgba(155,139,255,.3);border-radius:8px;font-size:12.5px;color:#e6e0f5;line-height:1.8;white-space:pre-wrap;overscroll-behavior:contain"></div>
@@ -824,27 +834,27 @@ async function loadJobPrefs(){
   $('#jobs-pref').value=d.custom||'';
   const a=$('#jobs-pref-analyzed');
   if(d.analyzed){a.style.display='block';a.textContent='🧠 AI 理解的配對標準:\n'+d.analyzed;}
+  // 兩個 slot 各自狀態
+  const fn=p=>p?p.split('/').pop():'';
+  $('#slot-zh').innerHTML=d.resume_zh?('✓ '+esc(fn(d.resume_zh))):'<span style="color:#c76">尚未上傳</span>';
+  $('#slot-en').innerHTML=d.resume_en?('✓ '+esc(fn(d.resume_en))):'<span style="color:#c76">尚未上傳</span>';
   const rb=$('#resume-box');
   if(d.resume_profile){rb.style.display='block';
-    rb.innerHTML='📄 <b>目前使用的履歷</b>'+(d.resume_filename?`（${esc(d.resume_filename)}）`:'')
-      +(d.resume_updated?` <span style="color:var(--dim)">${esc(d.resume_updated)}</span>`:'')
-      +'<br>🧠 '+esc(d.resume_profile);}
+    rb.innerHTML='🧠 <b>AI 用來配對的輪廓</b>（來自最新上傳的 '+esc(d.resume_filename||'')+'）:<br>'+esc(d.resume_profile);}
 }
 
-async function uploadResume(){
-  const b=$('#resume-up'),m=$('#resume-msg'),fi=$('#resume-file');
-  if(!fi.files.length){m.textContent='先選一個 PDF 檔';return;}
-  b.disabled=true;m.textContent='上傳+AI 讀取中…';
-  const fd=new FormData();fd.append('file',fi.files[0]);
+async function uploadResume(lang){
+  const m=$('#resume-msg'),fi=$('#resume-file-'+lang);
+  if(!fi.files.length){m.textContent='先選一個 '+(lang==='zh'?'中文':'英文')+'履歷 PDF';return;}
+  m.textContent='上傳'+(lang==='zh'?'中文':'英文')+'履歷+AI 讀取中…';
+  const fd=new FormData();fd.append('file',fi.files[0]);fd.append('lang',lang);
   try{
     const r=await fetch('/api/jobs/resume',{method:'POST',body:fd}).then(x=>x.json());
-    if(r.ok){m.textContent='✓ 讀懂了！按「重新掃描」用新履歷找工作';
-      const rb=$('#resume-box');rb.style.display='block';
-      rb.innerHTML='📄 <b>'+esc(r.filename)+'</b>（'+(r.lang==='en'?'英文':'中文')+'履歷）<br>🧠 '+esc(r.profile)
-        +'<br><span class="badge">搜尋關鍵字</span> '+esc((r.terms||[]).join(' · '));}
+    if(r.ok){m.textContent='✓ '+(lang==='zh'?'中文':'英文')+'履歷讀懂了！兩份都上傳後,投遞會自動挑對的那份';
+      loadJobPrefs();}
     else m.textContent='失敗：'+(r.error||'');
   }catch(e){m.textContent='上傳失敗：'+e;}
-  b.disabled=false;setTimeout(()=>{m.textContent='';},8000);
+  setTimeout(()=>{m.textContent='';},9000);
 }
 
 async function saveJobPrefs(){
@@ -876,10 +886,10 @@ async function showJD(btn){
 }
 
 async function applyJob(btn){
-  const url=btn.dataset.url,title=btn.dataset.title;
+  const url=btn.dataset.url,title=btn.dataset.title,is_foreign=btn.dataset.foreign==='1';
   btn.disabled=true;btn.textContent='📨 開啟投遞視窗…';
   const r=await fetch('/api/jobs/apply',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({url,title})}).then(x=>x.json()).catch(()=>null);
+    body:JSON.stringify({url,title,is_foreign})}).then(x=>x.json()).catch(()=>null);
   if(r&&r.ok){btn.textContent='📨 投遞視窗已開(看你的螢幕)';
     setTimeout(()=>{btn.textContent='📨 再投一次';btn.disabled=false;},8000);}
   else{btn.textContent='📨 幫我投遞';btn.disabled=false;alert('開啟失敗');}

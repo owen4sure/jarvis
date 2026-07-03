@@ -13,7 +13,7 @@ import urllib.request
 import zoneinfo
 import yaml
 
-from fastapi import FastAPI, File, Request, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import (JSONResponse, HTMLResponse, PlainTextResponse,
                                FileResponse, Response, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
@@ -1396,10 +1396,11 @@ def _extract_pdf_text(path):
 
 
 @app.post("/api/jobs/resume")
-async def upload_resume(file: UploadFile = File(...)):
+async def upload_resume(file: UploadFile = File(...), lang: str = Form("")):
     """上傳履歷(PDF/txt)→ 抽文字 → LLM 生成配對用的履歷輪廓 + 搜尋關鍵字,
     存進 job_profile.json。之後掃描/評分/深度分析都改用這份(換人用只要重傳)。
-    同時把檔案存起來當 LinkedIn 投遞用的履歷。"""
+    lang='zh'/'en' 明確指定這是中文還是英文履歷(存進對應 slot,投遞時 104 外商/英文缺
+    用英文、台灣中文缺用中文)。沒指定才自動偵測。兩份履歷可分開上傳、各存一個 slot。"""
     os.makedirs(_RESUME_DIR, exist_ok=True)
     name = os.path.basename(file.filename or "resume")
     raw = await file.read()
@@ -1435,15 +1436,20 @@ async def upload_resume(file: UploadFile = File(...)):
         obj = json.loads(_re.search(r"\{[\s\S]*\}", txt).group(0))
         profile = str(obj.get("profile", ""))[:900]
         terms = [str(t)[:40] for t in (obj.get("terms") or [])][:6]
-        lang = obj.get("lang", "")
+        detected_lang = obj.get("lang", "")
     except Exception:
-        profile, lang = text[:600], ("zh" if any("一" <= c <= "鿿" for c in text[:200]) else "en")
-    # 存進 profile(保留使用者原本的自訂條件 custom/analyzed)
+        profile = text[:600]
+        detected_lang = ("zh" if any("一" <= c <= "鿿" for c in text[:200]) else "en")
+    # slot:前端明確按了「中文/英文履歷」就用它;沒按才用 LLM 偵測的語言
+    slot_lang = lang.strip().lower() if lang.strip().lower() in ("zh", "en") else \
+        (detected_lang if detected_lang in ("zh", "en") else "en")
+    # 存進 profile(保留使用者原本的自訂條件 custom/analyzed 與另一個語言 slot)
     prof = _load_saved_profile()
     prof["resume_profile"] = profile
     prof["resume_terms"] = terms
     prof["resume_filename"] = name
-    prof[("resume_zh" if lang == "zh" else "resume_en")] = save_path
+    prof[("resume_zh" if slot_lang == "zh" else "resume_en")] = save_path
+    prof["resume_slot"] = slot_lang
     prof["resume_updated"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     _save_profile(prof)
     return JSONResponse({"ok": True, "profile": profile, "terms": terms,
@@ -1513,11 +1519,12 @@ async def apply_job(req: Request):
     body = await req.json()
     url = str((body or {}).get("url", "")).strip()
     title = str((body or {}).get("title", ""))
+    is_foreign = "1" if (body or {}).get("is_foreign") else "0"
     if not url.startswith("http"):
         return JSONResponse({"ok": False, "error": "bad url"}, status_code=400)
     subprocess.Popen(
         [os.path.expanduser("~/Hermes_Brain/.venv/bin/python"), "-u",
-         os.path.expanduser("~/Hermes_Brain/scripts/job_apply.py"), url, title],
+         os.path.expanduser("~/Hermes_Brain/scripts/job_apply.py"), url, title, is_foreign],
         cwd=os.path.expanduser("~/Hermes_Brain"),
         stdout=open(os.path.expanduser("~/Hermes_Brain/memory/logs/job_apply.log"), "a"),
         stderr=subprocess.STDOUT)
