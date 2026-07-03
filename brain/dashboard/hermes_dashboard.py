@@ -13,7 +13,7 @@ import urllib.request
 import zoneinfo
 import yaml
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.responses import (JSONResponse, HTMLResponse, PlainTextResponse,
                                FileResponse, Response, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
@@ -219,6 +219,18 @@ def api_finance():
     """代理 8809 理財總覽（含即時股價）。timeout 拉長因為要抓 Yahoo 報價。"""
     try:
         d = json.load(urllib.request.urlopen("http://127.0.0.1:8809/finance", timeout=15))
+        return JSONResponse(d)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
+@app.get("/api/expenses_range")
+def api_expenses_range(start: str = "", end: str = ""):
+    """代理 8809 花費區間明細查詢（記帳頁選日期範圍 → 看單筆消費明細＋總額）。"""
+    try:
+        q = urllib.parse.urlencode({"start": start, "end": end})
+        d = json.load(urllib.request.urlopen(
+            "http://127.0.0.1:8809/expenses_range?" + q, timeout=8))
         return JSONResponse(d)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)})
@@ -1165,10 +1177,10 @@ def get_architecture():
          "detail": "OpenAI 相容 API（8642），語音經橋接走這", "port": "8642", "file": "~/.hermes/hermes-agent"},
         {"id": "proxy", "label": "LLM Proxy", "role": "Gemini 金鑰輪換+多模型後備",
          "detail": "大腦的底層模型呼叫走這，過載自動換", "port": "8808", "file": "scripts/llm_proxy.py"},
-        {"id": "mcp_stackchan", "label": "stackchan MCP", "role": "裝置控制（35工具）",
-         "detail": "表情/嘴型/眨眼/12LED/轉頭/相機/喇叭/觸控", "port": "8767", "file": "stackchan-mcp"},
-        {"id": "mcp_life", "label": "hermes-life MCP", "role": "生活工具（8個）",
-         "detail": "財務/記帳/提醒/音樂/天氣，轉呼叫8809/8810", "port": "8769", "file": "scripts/hermes_life_mcp.py"},
+        {"id": "devtool", "label": "裝置控制通道", "role": "大腦→機器人(轉頭/表情/音量)",
+         "detail": "hermes-life robot_* 工具→xiaozhi 8003 /mcp/device_tool→裝置 MCP session（韌體 force 直連後 8767 不再使用）", "port": "8003", "file": "xiaozhi-server/patches/http_server.py"},
+        {"id": "mcp_life", "label": "hermes-life MCP", "role": "生活+裝置工具",
+         "detail": "財務/記帳/提醒/音樂/天氣/機器人控制，轉呼叫8809/8810/8003", "port": "8769", "file": "scripts/hermes_life_mcp.py"},
         {"id": "mem", "label": "記憶服務", "role": "統一記憶+財務/提醒後端",
          "detail": "facts.jsonl 單一真相，USER.md 自動同步給 CLI", "port": "8809", "file": "scripts/hermes_memory_endpoint.py"},
         {"id": "music", "label": "音樂服務", "role": "Chrome YouTube 播放",
@@ -1182,7 +1194,8 @@ def get_architecture():
         {"from": "bridge", "to": "brain", "label": "→大腦"},
         {"from": "telegram", "to": "brain", "label": "文字→大腦"},
         {"from": "brain", "to": "proxy", "label": "底層模型"},
-        {"from": "brain", "to": "mcp_stackchan", "label": "裝置工具"},
+        {"from": "brain", "to": "devtool", "label": "裝置工具"},
+        {"from": "devtool", "to": "xiaozhi", "label": "device MCP"},
         {"from": "brain", "to": "mcp_life", "label": "生活工具"},
         {"from": "mcp_life", "to": "mem", "label": "財務/提醒"},
         {"from": "mcp_life", "to": "music", "label": "音樂"},
@@ -1289,13 +1302,24 @@ def get_capabilities():
     skills = cfg.get("skills", {})
     pt = cfg.get("platform_toolsets", {})
     voice_full = "hermes-cli" in (pt.get("api_server") or [])
+    # 「有沒有真的開放給對話管道」= toolset 名稱要在 telegram 或 api_server 的清單裡，
+    # 不能只看 config 裡的全域開關（那個開了但沒掛給任何平台，對話裡也用不到，之前這裡誤判過）。
+    _deleg_wired = any("delegation" in (pt.get(p) or []) for p in ("telegram", "api_server"))
+    _cron_wired = any("cronjob" in (pt.get(p) or []) for p in ("telegram", "api_server"))
     import shutil as _sh
     cua = bool(_sh.which("cua-driver") or os.path.exists(os.path.expanduser("~/.local/bin/cua-driver")))
     caps = [
         {"name": "自主建技能", "desc": "做完任務自動把流程存成技能，下次更快",
          "on": voice_full, "detail": f"提醒間隔每 {skills.get('creation_nudge_interval', 10)} 輪"},
-        {"name": "子代理委派", "desc": "複雜任務拆給多個分身同時做",
-         "on": bool(deleg.get("orchestrator_enabled")), "detail": f"最多 {deleg.get('max_concurrent_children', 3)} 個分身・自動核准 {deleg.get('subagent_auto_approve')}"},
+        {"name": "子代理委派", "desc": "複雜任務拆給多個分身平行處理，共用你的財務/記憶工具",
+         "on": bool(deleg.get("orchestrator_enabled")) and _deleg_wired,
+         "detail": f"最多 {deleg.get('max_concurrent_children', 3)} 個分身・{'已開放給對話' if _deleg_wired else '尚未掛給任何管道'}"},
+        {"name": "自我排程", "desc": "跟 Jarvis 說「每天提醒我...」它自己會建立排程，用 hermes-agent 內建心跳執行",
+         "on": _cron_wired, "detail": "已開放給對話" if _cron_wired else "尚未掛給任何管道"},
+        {"name": "跨模型容錯", "desc": "主要模型服務掛掉時，自動切換到備援模型繼續對話",
+         "on": bool(cfg.get("fallback_providers")),
+         "detail": (f"備援：{(cfg.get('fallback_providers') or [{}])[0].get('model','-')}"
+                    if cfg.get("fallback_providers") else "未設定")},
         {"name": "電腦操作", "desc": "控制你的桌面、操作 App",
          "on": cua and voice_full, "detail": "driver 已裝" + ("" if cua else "（未裝）") + "，需 macOS 權限(輔助使用+螢幕錄製)"},
         {"name": "瀏覽器自動化", "desc": "自動上網點擊填表", "on": voice_full,
@@ -1313,6 +1337,498 @@ def get_capabilities():
     return JSONResponse({"capabilities": caps,
                          "voice_full_toolset": voice_full,
                          "skills_count": len(_hermes_skills())})
+
+
+_JOBS_DIR = os.path.expanduser("~/Hermes_Brain/config")
+
+
+@app.get("/api/jobs")
+def get_jobs():
+    """工作雷達榜單(job_scout.py 產出) + 過濾掉 dashboard ✕ 過的。"""
+    try:
+        with open(os.path.join(_JOBS_DIR, "job_matches.json"), encoding="utf-8") as f:
+            d = json.load(f)
+    except Exception:
+        return JSONResponse({"ok": True, "updated": None, "jobs": []})
+    try:
+        with open(os.path.join(_JOBS_DIR, "job_dislikes.json"), encoding="utf-8") as f:
+            dislikes = json.load(f)
+    except Exception:
+        dislikes = {}
+    jobs = [j for j in (d.get("top") or []) if j.get("key") not in dislikes
+            and f"{j.get('company','')}|{j.get('title','')}".lower() not in dislikes]
+    return JSONResponse({"ok": True, "updated": d.get("updated"), "jobs": jobs})
+
+
+@app.post("/api/jobs/dismiss")
+async def dismiss_job(req: Request):
+    """✕ 掉一個職缺:永不再出現,且之後 LLM 精評會把它當「口味負樣本」。"""
+    body = await req.json()
+    key = str((body or {}).get("key", "")).strip().lower()
+    title = str((body or {}).get("title", ""))
+    if not key:
+        return JSONResponse({"ok": False, "error": "missing key"}, status_code=400)
+    path = os.path.join(_JOBS_DIR, "job_dislikes.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            dislikes = json.load(f)
+    except Exception:
+        dislikes = {}
+    dislikes[key] = {"title": title,
+                     "ts": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(dislikes, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, path)
+    return JSONResponse({"ok": True, "count": len(dislikes)})
+
+
+_RESUME_DIR = os.path.expanduser("~/Hermes_Brain/config/resumes")
+
+
+def _extract_pdf_text(path):
+    try:
+        import pypdf
+        r = pypdf.PdfReader(path)
+        return "\n".join((p.extract_text() or "") for p in r.pages).strip()
+    except Exception:
+        return ""
+
+
+@app.post("/api/jobs/resume")
+async def upload_resume(file: UploadFile = File(...)):
+    """上傳履歷(PDF/txt)→ 抽文字 → LLM 生成配對用的履歷輪廓 + 搜尋關鍵字,
+    存進 job_profile.json。之後掃描/評分/深度分析都改用這份(換人用只要重傳)。
+    同時把檔案存起來當 LinkedIn 投遞用的履歷。"""
+    os.makedirs(_RESUME_DIR, exist_ok=True)
+    name = os.path.basename(file.filename or "resume")
+    raw = await file.read()
+    if len(raw) > 8 * 1024 * 1024:
+        return JSONResponse({"ok": False, "error": "檔案太大(上限8MB)"}, status_code=400)
+    save_path = os.path.join(_RESUME_DIR, name)
+    with open(save_path, "wb") as f:
+        f.write(raw)
+    # 抽文字
+    if name.lower().endswith(".pdf"):
+        text = _extract_pdf_text(save_path)
+    else:
+        text = raw.decode("utf-8", "ignore")
+    if len(text) < 40:
+        return JSONResponse({"ok": False,
+                             "error": "讀不到履歷文字(掃描版PDF?請改貼純文字或換檔)"}, status_code=400)
+    # LLM 生成輪廓 + 搜尋關鍵字
+    prompt = (
+        "讀這份履歷,產出職缺配對引擎要用的 JSON:\n"
+        '{"profile":"120字內描述他的程度/領域/硬技能/適合什麼職位(繁中)",'
+        '"terms":["3-6個用來搜職缺的關鍵字"],"lang":"zh或en(履歷主要語言)"}\n\n'
+        "履歷:\n" + text[:6000] + "\n\n只回 JSON。")
+    profile, terms = "", []
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(
+            "http://127.0.0.1:8808/v1beta/openai/chat/completions",
+            data=json.dumps({"model": "gemini-3.1-flash-lite",
+                             "messages": [{"role": "user", "content": prompt}],
+                             "temperature": 0.2}).encode(),
+            headers={"Content-Type": "application/json"}), timeout=50)
+        import re as _re
+        txt = json.loads(r.read())["choices"][0]["message"]["content"]
+        obj = json.loads(_re.search(r"\{[\s\S]*\}", txt).group(0))
+        profile = str(obj.get("profile", ""))[:900]
+        terms = [str(t)[:40] for t in (obj.get("terms") or [])][:6]
+        lang = obj.get("lang", "")
+    except Exception:
+        profile, lang = text[:600], ("zh" if any("一" <= c <= "鿿" for c in text[:200]) else "en")
+    # 存進 profile(保留使用者原本的自訂條件 custom/analyzed)
+    prof = _load_saved_profile()
+    prof["resume_profile"] = profile
+    prof["resume_terms"] = terms
+    prof["resume_filename"] = name
+    prof[("resume_zh" if lang == "zh" else "resume_en")] = save_path
+    prof["resume_updated"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    _save_profile(prof)
+    return JSONResponse({"ok": True, "profile": profile, "terms": terms,
+                         "filename": name, "lang": lang})
+
+
+def _load_saved_profile():
+    try:
+        with open(os.path.join(_JOBS_DIR, "job_profile.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_profile(prof):
+    path = os.path.join(_JOBS_DIR, "job_profile.json")
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(prof, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, path)
+
+
+@app.get("/api/jobs/prefs")
+def get_job_prefs():
+    try:
+        with open(os.path.join(_JOBS_DIR, "job_profile.json"), encoding="utf-8") as f:
+            return JSONResponse({"ok": True, **json.load(f)})
+    except Exception:
+        return JSONResponse({"ok": True, "custom": "", "analyzed": ""})
+
+
+@app.post("/api/jobs/prefs")
+async def set_job_prefs(req: Request):
+    """存自訂求職條件:先讓 LLM 把使用者的白話整理成配對引擎可用的標準
+    (硬性條件/加分/排除),存起來後 job_scout 的精評會以此為最高優先。"""
+    body = await req.json()
+    custom = str((body or {}).get("text", "")).strip()
+    analyzed = ""
+    if custom:
+        try:
+            prompt = (
+                "使用者描述了他想要的工作。把它整理成職缺配對引擎用的標準,分三類條列:"
+                "【硬性條件】(不符合就不推)/【加分】/【排除】(看到就跳過)。"
+                "保留他的原意、不要腦補他沒說的。50-120字。\n\n使用者說:\n" + custom)
+            r = urllib.request.urlopen(urllib.request.Request(
+                "http://127.0.0.1:8808/v1beta/openai/chat/completions",
+                data=json.dumps({"model": "gemini-3.1-flash-lite",
+                                 "messages": [{"role": "user", "content": prompt}],
+                                 "temperature": 0.2}).encode(),
+                headers={"Content-Type": "application/json"}), timeout=40)
+            analyzed = json.loads(r.read())["choices"][0]["message"]["content"].strip()[:500]
+        except Exception:
+            analyzed = ""  # LLM 掛了就存原文,配對引擎直接吃原文一樣能用
+    # 合併寫入:保留履歷輪廓/檔案路徑等既有欄位,只更新求職條件
+    data = _load_saved_profile()
+    data.update({"custom": custom, "analyzed": analyzed,
+                 "updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")})
+    _save_profile(data)
+    return JSONResponse({"ok": True, "custom": custom, "analyzed": analyzed})
+
+
+@app.post("/api/jobs/apply")
+async def apply_job(req: Request):
+    """一鍵投遞:背景開 job_apply.py(可見 Chrome+persistent 登入),自動 Easy Apply
+    +上傳履歷;沒把握的欄位會停下來留視窗給 Owen。立即回應,進度看 apply log。"""
+    import subprocess
+    body = await req.json()
+    url = str((body or {}).get("url", "")).strip()
+    title = str((body or {}).get("title", ""))
+    if not url.startswith("http"):
+        return JSONResponse({"ok": False, "error": "bad url"}, status_code=400)
+    subprocess.Popen(
+        [os.path.expanduser("~/Hermes_Brain/.venv/bin/python"), "-u",
+         os.path.expanduser("~/Hermes_Brain/scripts/job_apply.py"), url, title],
+        cwd=os.path.expanduser("~/Hermes_Brain"),
+        stdout=open(os.path.expanduser("~/Hermes_Brain/memory/logs/job_apply.log"), "a"),
+        stderr=subprocess.STDOUT)
+    return JSONResponse({"ok": True, "message": "投遞視窗開啟中"})
+
+
+@app.get("/api/jobs/apply_log")
+def get_apply_log():
+    try:
+        with open(os.path.join(_JOBS_DIR, "job_apply_log.json"), encoding="utf-8") as f:
+            return JSONResponse({"ok": True, **json.load(f)})
+    except Exception:
+        return JSONResponse({"ok": True, "applies": []})
+
+
+_JD_CACHE = os.path.join(_JOBS_DIR, "job_jd_cache.json")
+
+
+def _fetch_jd(job):
+    """抓單一職缺的完整 JD 原文。LinkedIn 用 guest jobPosting API,Yourator 抓職缺頁。"""
+    import re as _re
+    ua = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/120 Safari/537.36")
+    try:
+        if job.get("source") == "LinkedIn" and job.get("jd_id"):
+            url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job['jd_id']}"
+            raw = urllib.request.urlopen(
+                urllib.request.Request(url, headers={"User-Agent": ua}), timeout=18
+            ).read().decode("utf-8", "ignore")
+            m = _re.search(r'show-more-less-html__markup[^>]*>([\s\S]*?)</div>', raw)
+            if m:
+                t = _re.sub(r'<[^>]+>', ' ', m.group(1))
+                return _re.sub(r'\s+', ' ', t).strip()[:4000]
+        # Yourator / 其他:抓職缺頁的 JSON-LD JobPosting.description(最完整)
+        if job.get("url", "").startswith("http"):
+            raw = urllib.request.urlopen(
+                urllib.request.Request(job["url"], headers={"User-Agent": ua}), timeout=18
+            ).read().decode("utf-8", "ignore")
+            for block in _re.findall(r'<script type="application/ld\+json">([\s\S]*?)</script>', raw):
+                try:
+                    obj = json.loads(block)
+                except Exception:
+                    continue
+                for cand in (obj if isinstance(obj, list) else [obj]):
+                    desc = isinstance(cand, dict) and cand.get("description")
+                    if desc:
+                        t = _re.sub(r'<[^>]+>', ' ', desc)
+                        t = t.replace("&nbsp;", " ").replace("&amp;", "&")
+                        return _re.sub(r'\s+', ' ', t).strip()[:4000]
+            m = _re.search(r'<meta name="description" content="([^"]{40,})"', raw)
+            if m:
+                return m.group(1)[:4000]
+    except Exception:
+        pass
+    return ""
+
+
+@app.post("/api/jobs/jd")
+async def get_job_jd(req: Request):
+    """抓某職缺的完整 JD + 翻成中文(整段,不只標題)。有快取避免重抓重譯。"""
+    body = await req.json()
+    key = str((body or {}).get("key", "")).strip().lower()
+    if not key:
+        return JSONResponse({"ok": False, "error": "missing key"}, status_code=400)
+    cache = {}
+    try:
+        with open(_JD_CACHE, encoding="utf-8") as f:
+            cache = json.load(f)
+    except Exception:
+        pass
+    if key in cache:
+        return JSONResponse({"ok": True, "cached": True, **cache[key]})
+    # 從榜單找這筆職缺
+    try:
+        with open(os.path.join(_JOBS_DIR, "job_matches.json"), encoding="utf-8") as f:
+            jobs = (json.load(f).get("top") or [])
+    except Exception:
+        jobs = []
+    job = next((j for j in jobs if j.get("key") == key), None)
+    if not job:
+        return JSONResponse({"ok": False, "error": "job not found"}, status_code=404)
+
+    def _fetch_and_translate():
+        """阻塞的抓 JD + 翻譯,丟 threadpool 跑,別卡 event loop。回 (jd, jd_zh)。"""
+        jd = _fetch_jd(job)
+        if not jd:
+            return "", ""
+        # 已是中文就不翻
+        zh_ratio = sum(1 for c in jd if "一" <= c <= "鿿") / max(len(jd), 1)
+        if zh_ratio > 0.25:
+            return jd, jd
+        try:
+            prompt = ("把這段職缺說明完整翻成通順的繁體中文,保留條列結構,不要加註解或省略:\n\n" + jd)
+            r = urllib.request.urlopen(urllib.request.Request(
+                "http://127.0.0.1:8808/v1beta/openai/chat/completions",
+                data=json.dumps({"model": "gemini-3.1-flash-lite",
+                                 "messages": [{"role": "user", "content": prompt}],
+                                 "temperature": 0.1}).encode(),
+                headers={"Content-Type": "application/json"}), timeout=70)
+            return jd, json.loads(r.read())["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            return jd, f"(翻譯失敗:{str(e)[:40]},以下為原文)\n\n" + jd
+
+    jd, jd_zh = await asyncio.to_thread(_fetch_and_translate)
+    if not jd:
+        return JSONResponse({"ok": True, "jd": "", "jd_zh": "",
+                             "note": "這個職缺抓不到說明內文,點「查看職缺」看原頁"})
+    entry = {"jd": jd, "jd_zh": jd_zh}
+    cache[key] = entry
+    # 快取別無限長大
+    if len(cache) > 300:
+        for k in list(cache)[:-300]:
+            cache.pop(k, None)
+    tmp = _JD_CACHE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, _JD_CACHE)
+    return JSONResponse({"ok": True, **entry})
+
+
+_SAVED_PATH = os.path.join(_JOBS_DIR, "job_saved.json")
+
+
+def _load_saved():
+    try:
+        with open(_SAVED_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _write_saved(d):
+    tmp = _SAVED_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, _SAVED_PATH)
+
+
+@app.get("/api/jobs/saved")
+def list_saved():
+    d = _load_saved()
+    jobs = sorted(d.values(), key=lambda x: x.get("saved_ts", ""), reverse=True)
+    return JSONResponse({"ok": True, "jobs": jobs})
+
+
+@app.post("/api/jobs/save")
+async def save_job(req: Request):
+    """⭐ 關注/取消關注。關注時把職缺(含 JD)存進獨立的追蹤清單,可反覆查看。"""
+    body = await req.json()
+    key = str((body or {}).get("key", "")).strip().lower()
+    if not key:
+        return JSONResponse({"ok": False, "error": "missing key"}, status_code=400)
+    saved = _load_saved()
+    if key in saved:  # 再按一次 = 取消關注
+        saved.pop(key, None)
+        _write_saved(saved)
+        return JSONResponse({"ok": True, "saved": False})
+    # 從榜單找完整職缺
+    try:
+        with open(os.path.join(_JOBS_DIR, "job_matches.json"), encoding="utf-8") as f:
+            job = next((j for j in (json.load(f).get("top") or [])
+                        if j.get("key") == key), None)
+    except Exception:
+        job = None
+    if not job:
+        return JSONResponse({"ok": False, "error": "job not found"}, status_code=404)
+    entry = dict(job)
+    entry["jd"] = await asyncio.to_thread(_fetch_jd, job)  # 阻塞抓取丟 threadpool,別卡 event loop
+    entry["saved_ts"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    saved[key] = entry
+    _write_saved(saved)
+    return JSONResponse({"ok": True, "saved": True, "count": len(saved)})
+
+
+@app.post("/api/jobs/research")
+async def research_job(req: Request):
+    """🔬 對追蹤中的職缺做深度研究:網路查公司風評/薪資行情 + 用你的履歷對照 JD
+    做差距分析與補強建議 + 面試準備方向。結果存進追蹤清單,反覆看不用重跑。
+    force=true 可要求重新研究。"""
+    body = await req.json()
+    key = str((body or {}).get("key", "")).strip().lower()
+    force = bool((body or {}).get("force"))
+    saved = _load_saved()
+    entry = saved.get(key)
+    if not entry:
+        return JSONResponse({"ok": False, "error": "先關注這個職缺"}, status_code=400)
+    if entry.get("research") and not force:
+        return JSONResponse({"ok": True, "cached": True, "research": entry["research"],
+                             "research_ts": entry.get("research_ts")})
+    # 履歷輪廓:呼叫 _resume_profile()(動態讀上傳履歷),不是 import 靜態 RESUME_PROFILE
+    # 常數——後者永遠是預設值,上傳新履歷後研究會拿錯人的背景。
+    try:
+        import sys as _sys
+        _sys.path.insert(0, os.path.expanduser("~/Hermes_Brain"))
+        from scripts.job_scout import _resume_profile
+        RESUME_PROFILE = _resume_profile()
+    except Exception:
+        RESUME_PROFILE = "(履歷輪廓載入失敗)"
+    prof = {}
+    try:
+        with open(os.path.join(_JOBS_DIR, "job_profile.json"), encoding="utf-8") as f:
+            prof = json.load(f)
+    except Exception:
+        pass
+    custom = (prof.get("analyzed") or prof.get("custom") or "").strip()
+    jd = (entry.get("jd") or "")[:2500]
+    prompt = (
+        f"我在考慮應徵這個職缺,幫我上網研究並給我一份完整的求職情報。用繁體中文,分成清楚的段落標題:\n\n"
+        f"職缺:{entry.get('title')}\n公司:{entry.get('company')}\n地點:{entry.get('loc')}\n"
+        f"薪資(若有):{entry.get('salary') or '未列'}\n"
+        f"職缺說明(JD):\n{jd or '(無)'}\n\n"
+        f"我的背景:\n{RESUME_PROFILE}\n"
+        + (f"我額外的求職條件:{custom}\n" if custom else "")
+        + "\n只用你的網路搜尋能力(search_web)查資料後,【直接把完整內容打字回覆給我】。\n"
+        "嚴禁:不要開瀏覽器自動化、不要執行 shell、不要 do_on_computer、不要 dispatch_task、"
+        "不要把結果存成檔案——這些都會失敗。答案就直接寫在你的回覆裡。\n"
+        "產出這五個部分:\n"
+        "① 公司風評與文化(Glassdoor/PTT/求職版的員工評價、優缺點、離職率風向)\n"
+        "② 這個職位的薪資行情(用台灣市場實際數字)\n"
+        "③ JD 需求 vs 我的背景:我哪些條件已符合、哪些有落差\n"
+        "④ 針對落差,我該怎麼補強/在履歷面試怎麼包裝(具體可行動)\n"
+        "⑤ 面試準備方向與可能會問的問題\n"
+        "務必實際查網路,不要空泛。結論導向、講重點。")
+    def _looks_bad(t):
+        # flash-lite 偶發:幻覺說自己不能上網 / 亂呼叫不存在的工具 → 判定壞回應要重試
+        return (not t or len(t) < 120
+                or ("不能" in t and ("上網" in t or "查" in t) and "資料" in t)
+                or "dispatch_task" in t or "工具清單" in t)
+
+    api_key = _hermes_env().get("API_SERVER_KEY", "hermes-voice-local")
+
+    def _ask():
+        r = urllib.request.urlopen(urllib.request.Request(
+            "http://127.0.0.1:8642/v1/chat/completions",
+            data=json.dumps({"model": "hermes",
+                             "messages": [{"role": "user", "content": prompt}],
+                             "stream": False}).encode(),
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {api_key}"}), timeout=180)
+        return json.loads(r.read())["choices"][0]["message"]["content"].strip()
+
+    def _ask_with_retry():
+        r = ""
+        for _attempt in range(3):   # 壞回應自動重試(flash-lite 不穩)
+            r = _ask()
+            if not _looks_bad(r):
+                break
+        return r
+
+    research = ""
+    try:
+        # 阻塞的 LLM 呼叫(最壞 3×180s)丟到 threadpool,別卡死整個 dashboard event loop
+        research = await asyncio.to_thread(_ask_with_retry)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"研究失敗:{str(e)[:60]}"}, status_code=502)
+    if _looks_bad(research):
+        return JSONResponse({"ok": False, "error": "AI 這次沒查成(模型不穩),再按一次深度分析"}, status_code=502)
+    entry["research"] = research
+    entry["research_ts"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    saved[key] = entry
+    _write_saved(saved)
+    return JSONResponse({"ok": True, "research": research, "research_ts": entry["research_ts"]})
+
+
+@app.post("/api/jobs/rescan")
+def rescan_jobs():
+    """手動重掃(不推播,只更新榜單)。同步跑,前端等它(約 30-60s)。"""
+    import subprocess
+    try:
+        r = subprocess.run(
+            [os.path.expanduser("~/Hermes_Brain/.venv/bin/python"), "-u", "-m", "scripts.job_scout"],
+            cwd=os.path.expanduser("~/Hermes_Brain"),
+            capture_output=True, text=True, timeout=150)
+        return JSONResponse({"ok": r.returncode == 0, "log": (r.stdout or "")[-400:]})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:100]})
+
+
+@app.get("/api/heartbeat")
+def get_heartbeat():
+    """Jarvis 的主動關懷心跳狀態：排程、下次判斷時間、上次判斷結果（開口了還是安靜）。
+    讀 hermes-agent 自己的 cron jobs.json + 最新一次執行的 output（純讀、不影響排程本身）。"""
+    jobs_path = os.path.join(HERMES_HOME, "cron", "jobs.json")
+    try:
+        with open(jobs_path, encoding="utf-8") as f:
+            jobs = (json.load(f) or {}).get("jobs", [])
+    except Exception:
+        return JSONResponse({"ok": False, "job": None})
+    job = next((j for j in jobs if j.get("name") == "Jarvis 主動關懷"), None)
+    if not job:
+        return JSONResponse({"ok": True, "job": None})
+    last_decision, last_spoke = None, None
+    out_dir = os.path.join(HERMES_HOME, "cron", "output", job.get("id", ""))
+    try:
+        files = sorted(os.listdir(out_dir))
+        if files:
+            content = open(os.path.join(out_dir, files[-1]), encoding="utf-8").read()
+            resp = content.split("## Response", 1)[-1].strip()
+            last_spoke = "[SILENT]" not in resp
+            last_decision = resp if last_spoke else "（判斷安靜，沒有開口）"
+    except Exception:
+        pass
+    return JSONResponse({"ok": True, "job": {
+        "schedule": job.get("schedule_display"),
+        "next_run_at": job.get("next_run_at"),
+        "last_run_at": job.get("last_run_at"),
+        "last_status": job.get("last_status"),
+        "enabled": job.get("enabled"),
+        "last_decision": last_decision,
+        "last_spoke": last_spoke,
+    }})
 
 
 # ---------- 系統狀態 ----------

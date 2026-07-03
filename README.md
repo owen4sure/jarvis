@@ -146,6 +146,23 @@ Memory is engineered in layers, so knowing you never depends on a model "remembe
 - **Live editing** — every memory is visible and editable in the dashboard, with changes reflected in the very next turn
 - **100% local** — embeddings are computed on-device; your memory never leaves your machine
 
+## 💼 Job Radar — upload your resume, get AI-picked jobs daily
+
+![Job Radar](docs/screenshots/jobs.png)
+
+Not keyword matching — it **reads your resume, then scores every posting against *you***.
+
+- **Upload a resume (PDF)** → an LLM builds your matching profile and search keywords. Swap the resume to use it for anyone.
+- **Daily auto-scan** (12:35) of Yourator + LinkedIn; the LLM scores each job **0–100 with a one-line reason**, and pushes newly-appeared high-fit jobs to Telegram.
+- **English postings get a Chinese translation** — title and full JD, fetched and translated on demand.
+- **Custom hard preferences** in plain words ("remote-first, 70k+, AI implementation, no finance") become the top-priority matching standard.
+- **Dislike with ✕** — the job disappears and becomes a negative signal, so matches sharpen over time.
+- **☆ Save** to a persistent shortlist; **🔬 Deep-dive** actually researches company reputation, salary range, JD-vs-your-resume gap + how to close it, and interview prep — cached for re-reading.
+- **📨 One-click LinkedIn apply** — opens a visible window, auto Easy-Apply + resume upload, and stops on any field it's unsure about so you finish it by hand (better to under-click than mis-submit).
+- **Conversational** — say "any new jobs?", "details on that Google role", "follow it", "research it" over Telegram/voice; same tools everywhere.
+
+> A generic version (anyone uploads a resume to find jobs) is open-sourced separately at [owen4sure/job-radar](https://github.com/owen4sure/job-radar).
+
 ## Correctness engineering
 
 - **Deterministic answer layer** — high-frequency money questions are answered by Python computation that produces the *complete sentence*; the model recites it verbatim

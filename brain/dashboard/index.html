@@ -256,6 +256,7 @@ body.privacy .pv:hover{filter:blur(0)}
     <div class="nav-i" data-p="arch"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.2"/></svg></span><span class="lb">全部</span></div>
     <div class="nav-i" data-p="brain"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 4a4 4 0 0 0-4 4v0a3 3 0 0 0-1 5.8V16a3 3 0 0 0 5 2.2A3 3 0 0 0 17 16v-2.2A3 3 0 0 0 16 8v0a4 4 0 0 0-4-4Z"/><path d="M12 4v14M8 8h0M16 8h0M7 13.8h2M15 13.8h2"/></svg></span><span class="lb">大腦</span></div>
     <div class="nav-i" data-p="people"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.4.2 4 2 4 4.3"/></svg></span><span class="lb">認識的人</span></div>
+    <div class="nav-i" data-p="jobs"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/><path d="M11 12v2h2v-2"/></svg></span><span class="lb">工作</span></div>
     <div class="nav-i" data-p="system" style="margin-top:auto"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2 2M16.7 16.7l2 2M18.7 5.3l-2 2M7.3 16.7l-2 2"/></svg></span><span class="lb">系統</span><span class="badge" id="navbadge">0</span></div>
   </nav>
 
@@ -478,6 +479,10 @@ body.privacy .pv:hover{filter:blur(0)}
         <div style="font-size:12px;color:var(--dim);margin:10px 0 4px">最近的技能（含它自己長出來的）：</div>
         <div id="evo-skills"></div>
       </div>
+      <div class="panel"><h3><span class="ic">🫀</span>主動關懷心跳</h3>
+        <div style="font-size:12px;color:var(--dim);margin-bottom:8px">用 hermes-agent 自己的心跳（每60秒tick一次）定期醒來判斷「現在適不適合主動找你」——不是規則觸發，是判斷力決定，多數時候該安靜就安靜。</div>
+        <div id="heartbeat-box"></div>
+      </div>
       <div class="panel"><h3><span class="ic">🛠️</span>全部工具 · 怎麼接的</h3>
         <div style="font-size:12px;color:var(--dim);margin-bottom:8px">每個工具來自哪個 MCP server、後端端點。</div>
         <div class="tg" id="tools-groups"></div>
@@ -500,6 +505,35 @@ body.privacy .pv:hover{filter:blur(0)}
         <div id="cmd-list" style="display:flex;flex-wrap:wrap;gap:6px">
           <span class="tag">/remember 記一筆事實</span><span class="tag">/expense 記帳</span><span class="tag">/research 深度研究</span>
           <span class="tag">/convert 匯率</span><span class="tag">/contact 聯絡提醒</span><span class="tag">/watch 航班追蹤</span><span class="tag">/budget 預算</span></div></div>
+    </section>
+
+    <!-- 工作雷達 -->
+    <section class="page" id="p-jobs">
+      <div class="ph"><div><h2>💼 工作雷達</h2><div class="desc">每天 12:35 自動掃 Yourator+LinkedIn，LLM 按你的履歷逐缺評適配分。✕ 掉的永不再出現、還會變成口味訊號讓之後推得更準。</div></div>
+        <div><button class="btn" id="jobs-rescan" onclick="rescanJobs()">🔄 重新掃描</button></div></div>
+      <div class="panel" style="margin-bottom:12px"><h3><span class="ic">📄</span>我的履歷</h3>
+        <div style="font-size:12px;color:var(--dim);margin-bottom:8px">上傳你的履歷(PDF),AI 讀懂後就用它來配對、評分、深度分析——換人用只要換一份履歷。也是 LinkedIn 一鍵投遞會送出的檔案。</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input type="file" id="resume-file" accept=".pdf,.txt" style="font-size:12px;color:var(--dim)">
+          <button class="btn" id="resume-up" onclick="uploadResume()">⬆️ 上傳並讓 AI 讀懂</button>
+          <span class="msg" id="resume-msg" style="font-size:12px;color:#9fe"></span>
+        </div>
+        <div id="resume-box" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(6,14,24,.5);border:1px solid color-mix(in srgb,var(--cy) 18%,#0a1622);border-radius:8px;font-size:12px;color:#cfe;line-height:1.7"></div>
+      </div>
+      <div class="panel" style="margin-bottom:12px"><h3><span class="ic">🎯</span>我要的工作條件</h3>
+        <div style="font-size:12px;color:var(--dim);margin-bottom:8px">覺得推得不準?用白話寫你要什麼(例:「我要遠端優先、月薪7萬以上、想做AI導入顧問、不要金融業」),AI 會整理成配對標準,之後每次掃描都以這個為最高優先。</div>
+        <textarea id="jobs-pref" placeholder="寫下你想要的工作長什麼樣子…" style="width:100%;min-height:64px;background:rgba(4,10,18,.8);border:1px solid color-mix(in srgb,var(--cy) 22%,#0a1622);border-radius:8px;color:#cfe;font-size:13px;line-height:1.6;padding:10px;font-family:inherit"></textarea>
+        <div style="margin-top:8px;display:flex;gap:10px;align-items:center">
+          <button class="btn" id="jobs-pref-save" onclick="saveJobPrefs()">💾 儲存並讓 AI 理解</button>
+          <span id="jobs-pref-msg" style="font-size:12px;color:#9fe"></span></div>
+        <div id="jobs-pref-analyzed" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(6,14,24,.5);border:1px solid color-mix(in srgb,var(--cy) 18%,#0a1622);font-size:12px;color:#cfe;line-height:1.7;white-space:pre-wrap"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button class="btn sm" id="jobs-tab-all" onclick="switchJobsTab('all')" style="background:var(--cy);color:#021">📋 推薦職缺</button>
+        <button class="btn sm" id="jobs-tab-saved" onclick="switchJobsTab('saved')" style="background:none;border:1px solid var(--line);color:var(--dim)">⭐ 我追蹤的 <span id="saved-count">0</span></button>
+      </div>
+      <div style="font-size:12px;color:var(--dim);margin:0 0 10px" id="jobs-meta"></div>
+      <div id="jobs-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;align-items:start"></div>
     </section>
 
     <!-- 對話 -->
@@ -541,6 +575,20 @@ body.privacy .pv:hover{filter:blur(0)}
       <div class="panel" id="money-hero"><div class="empty">載入中…</div></div>
       <div class="grid g4" id="money-stats" style="margin-bottom:18px"></div>
       <div class="panel" id="fin-quick"></div>
+      <!-- 花費區間查詢：選日期範圍 → 逐筆消費明細＋總額（跟語音 query_expense_range 同一個 8809 端點）-->
+      <div class="panel" id="fin-range">
+        <h3><span class="ic">🔎</span>花費明細查詢<span style="margin-left:auto;font-size:12px;color:var(--dim)">選日期範圍，看每一筆消費與總額</span></h3>
+        <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+          <input type="date" id="rng-start" class="add" style="flex:0 0 150px;margin:0">
+          <span style="color:var(--dim)">到</span>
+          <input type="date" id="rng-end" class="add" style="flex:0 0 150px;margin:0">
+          <button class="btn solid" onclick="queryExpRange()">查詢</button>
+          <button class="btn" onclick="rngPreset(0)">今天</button>
+          <button class="btn" onclick="rngPreset(6)">近7天</button>
+          <button class="btn" onclick="rngPreset(29)">近30天</button>
+        </div>
+        <div id="rng-result"><div class="empty">選好日期按「查詢」，Jarvis 幫你把逐筆消費列出來</div></div>
+      </div>
       <div class="panel" id="fin-expenses"></div>
       <div class="panel" id="fin-spendpie"></div>
       <div class="panel" id="fin-analysis"></div>
@@ -676,7 +724,173 @@ function switchPage(p){
   else if(p==='tasks'){loadReminders();loadTodos();}
   else if(p==='commands')loadCustomCmds();
   else if(p==='money'||p==='invest')loadFinance(!!fin.ov);
+  else if(p==='jobs'){loadJobs();loadJobPrefs();}
   else if(p==='system'){loadStatus();loadKeys();}
+}
+
+let jobsTab='all', savedKeys=new Set();
+
+function switchJobsTab(t){
+  jobsTab=t;
+  $('#jobs-tab-all').style.cssText=t==='all'?'background:var(--cy);color:#021':'background:none;border:1px solid var(--line);color:var(--dim)';
+  $('#jobs-tab-saved').style.cssText=t==='saved'?'background:var(--gold);color:#021':'background:none;border:1px solid var(--line);color:var(--dim)';
+  loadJobs();
+}
+
+function jobCard(j,saved){
+  const fit=j.fit!=null?j.fit:null;
+  const col=fit==null?'var(--dim)':fit>=80?'#3affa0':fit>=65?'var(--cy)':'var(--gold)';
+  const key=j.key||((j.company||'')+'|'+(j.title||'')).toLowerCase();
+  const isSaved=saved||savedKeys.has(key);
+  return `<div class="panel" style="margin:0;position:relative" data-jobkey="${esc(key)}">
+    <button onclick="dismissJob(this)" data-key="${esc(key)}" data-title="${esc(j.title||'')}"
+      title="不喜歡,以後別推類似的" style="position:absolute;top:10px;right:10px;background:none;border:1px solid rgba(255,90,106,.4);color:#ff5a6a;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:13px;line-height:1">✕</button>
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;padding-right:30px">
+      ${fit!=null?`<b style="font-size:20px;color:${col};text-shadow:0 0 10px ${col}">${fit}%</b>`:''}
+      <b style="color:#eaf6ff;font-size:14px;line-height:1.4">${esc(j.title||'')}</b></div>
+    ${j.title_zh?`<div style="font-size:12px;color:#9fe;margin:-2px 0 6px">🈶 ${esc(j.title_zh)}</div>`:''}
+    <div style="font-size:12px;color:#9fe">🏢 ${esc(j.company||'')}　📍 ${esc(j.loc||'')}　<span style="font-size:10px;color:#7cf;border:1px solid rgba(0,229,255,.35);border-radius:4px;padding:1px 6px">${esc(j.source||'?')}</span></div>
+    ${j.salary?`<div style="font-size:12px;color:var(--gold);margin-top:3px">💰 ${esc(j.salary)}</div>`:''}
+    ${j.reason?`<div style="font-size:12px;color:var(--dim);margin-top:6px;line-height:1.5">💡 ${esc(j.reason)}</div>`:''}
+    <div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap">
+      <a href="${esc(j.url||'#')}" target="_blank" style="font-size:12px;color:var(--cy);text-decoration:none;border:1px solid color-mix(in srgb,var(--cy) 30%,transparent);border-radius:6px;padding:4px 12px;display:inline-block">查看職缺 →</a>
+      <button onclick="saveJob(this)" data-key="${esc(key)}" style="font-size:12px;color:${isSaved?'#021':'#ffd76a'};background:${isSaved?'#ffcf5c':'none'};border:1px solid rgba(255,207,92,.45);border-radius:6px;padding:4px 12px;cursor:pointer">${isSaved?'★ 已追蹤':'☆ 關注'}</button>
+      <button onclick="showJD(this)" data-key="${esc(key)}" style="font-size:12px;color:#ffcf5c;background:none;border:1px solid rgba(255,207,92,.35);border-radius:6px;padding:4px 12px;cursor:pointer">📄 看中文說明</button>
+      ${(j.source==='LinkedIn')?`<button onclick="applyJob(this)" data-url="${esc(j.url||'')}" data-title="${esc(j.title||'')}" style="font-size:12px;color:#3affa0;background:none;border:1px solid rgba(58,255,160,.35);border-radius:6px;padding:4px 12px;cursor:pointer">📨 幫我投遞</button>`:''}
+      ${isSaved?`<button onclick="researchJob(this)" data-key="${esc(key)}" style="font-size:12px;color:#c9a3ff;background:none;border:1px solid rgba(155,139,255,.45);border-radius:6px;padding:4px 12px;cursor:pointer">🔬 深度分析</button>`:''}</div>
+    <div class="jd-box" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(4,10,18,.7);border:1px solid color-mix(in srgb,var(--gold) 25%,#0a1622);border-radius:8px;font-size:12px;color:#dce8f5;line-height:1.75;white-space:pre-wrap;overscroll-behavior:contain"></div>
+    <div class="research-box" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(12,8,24,.7);border:1px solid rgba(155,139,255,.3);border-radius:8px;font-size:12.5px;color:#e6e0f5;line-height:1.8;white-space:pre-wrap;overscroll-behavior:contain"></div>
+  </div>`;
+}
+
+async function loadJobs(){
+  const list=$('#jobs-list'),meta=$('#jobs-meta');
+  list.innerHTML='<div class="empty">載入中…</div>';
+  // 先抓追蹤清單(標記卡片 + 更新數字)
+  const sd=await get('/api/jobs/saved');savedKeys=new Set((sd&&sd.jobs||[]).map(j=>j.key));
+  $('#saved-count').textContent=savedKeys.size;
+  if(jobsTab==='saved'){
+    const jobs=(sd&&sd.jobs)||[];
+    meta.textContent=`你追蹤的 ${jobs.length} 個職缺（隨時回來看、做深度分析）`;
+    list.innerHTML=jobs.length?jobs.map(j=>jobCard(j,true)).join(''):'<div class="empty">還沒追蹤任何職缺。在「推薦職缺」按 ☆ 關注,就會存到這裡。</div>';
+    return;
+  }
+  const d=await get('/api/jobs');
+  if(!d||!d.jobs){list.innerHTML='<div class="empty">讀取失敗</div>';return;}
+  meta.textContent=d.updated?`最後掃描:${d.updated}｜${d.jobs.length} 個達標職缺`:'還沒掃過,按「重新掃描」跑第一輪';
+  if(!d.jobs.length){list.innerHTML='<div class="empty">目前沒有達標職缺(可能都被你 ✕ 光了,或按重新掃描)</div>';return;}
+  list.innerHTML=d.jobs.map(j=>jobCard(j,false)).join('');
+}
+
+async function saveJob(btn){
+  const key=btn.dataset.key;btn.disabled=true;
+  const r=await fetch('/api/jobs/save',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({key})}).then(x=>x.json()).catch(()=>null);
+  if(r&&r.ok){
+    if(r.saved){savedKeys.add(key);btn.textContent='★ 已追蹤';btn.style.background='#ffcf5c';btn.style.color='#021';}
+    else{savedKeys.delete(key);btn.textContent='☆ 關注';btn.style.background='none';btn.style.color='#ffd76a';
+      if(jobsTab==='saved'){btn.closest('.panel').remove();}}
+    $('#saved-count').textContent=savedKeys.size;
+  }
+  btn.disabled=false;
+}
+
+async function researchJob(btn){
+  const box=btn.closest('.panel').querySelector('.research-box');
+  if(box.style.display==='block'){box.style.display='none';btn.textContent='🔬 深度分析';return;}
+  box.style.display='block';box.textContent='🔬 上網研究中(公司風評 / 薪資行情 / JD 差距 / 面試準備)…約 30-90 秒';
+  btn.disabled=true;
+  try{
+    const r=await fetch('/api/jobs/research',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({key:btn.dataset.key})}).then(x=>x.json());
+    box.textContent=r.ok?(r.research+(r.research_ts?`\n\n—— 分析於 ${r.research_ts}（會存起來，下次直接看）`:'')):('研究失敗:'+(r.error||''));
+  }catch(e){box.textContent='研究逾時,再按一次看快取或重試';}
+  btn.disabled=false;btn.textContent='🔬 收合分析';
+}
+
+async function dismissJob(btn){
+  const key=btn.dataset.key,title=btn.dataset.title;
+  btn.disabled=true;
+  const r=await fetch('/api/jobs/dismiss',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({key,title})}).then(x=>x.json()).catch(()=>null);
+  if(r&&r.ok){const card=btn.closest('.panel');card.style.transition='.25s';card.style.opacity='0';card.style.transform='scale(.95)';
+    setTimeout(()=>{card.remove();const n=$$('#jobs-list .panel').length;
+      if(!n)$('#jobs-list').innerHTML='<div class="empty">都看完了,明天中午有新的會推 Telegram</div>';},260);}
+  else{btn.disabled=false;alert('刪除失敗,再試一次');}
+}
+
+async function loadJobPrefs(){
+  const d=await get('/api/jobs/prefs');if(!d)return;
+  $('#jobs-pref').value=d.custom||'';
+  const a=$('#jobs-pref-analyzed');
+  if(d.analyzed){a.style.display='block';a.textContent='🧠 AI 理解的配對標準:\n'+d.analyzed;}
+  const rb=$('#resume-box');
+  if(d.resume_profile){rb.style.display='block';
+    rb.innerHTML='📄 <b>目前使用的履歷</b>'+(d.resume_filename?`（${esc(d.resume_filename)}）`:'')
+      +(d.resume_updated?` <span style="color:var(--dim)">${esc(d.resume_updated)}</span>`:'')
+      +'<br>🧠 '+esc(d.resume_profile);}
+}
+
+async function uploadResume(){
+  const b=$('#resume-up'),m=$('#resume-msg'),fi=$('#resume-file');
+  if(!fi.files.length){m.textContent='先選一個 PDF 檔';return;}
+  b.disabled=true;m.textContent='上傳+AI 讀取中…';
+  const fd=new FormData();fd.append('file',fi.files[0]);
+  try{
+    const r=await fetch('/api/jobs/resume',{method:'POST',body:fd}).then(x=>x.json());
+    if(r.ok){m.textContent='✓ 讀懂了！按「重新掃描」用新履歷找工作';
+      const rb=$('#resume-box');rb.style.display='block';
+      rb.innerHTML='📄 <b>'+esc(r.filename)+'</b>（'+(r.lang==='en'?'英文':'中文')+'履歷）<br>🧠 '+esc(r.profile)
+        +'<br><span class="badge">搜尋關鍵字</span> '+esc((r.terms||[]).join(' · '));}
+    else m.textContent='失敗：'+(r.error||'');
+  }catch(e){m.textContent='上傳失敗：'+e;}
+  b.disabled=false;setTimeout(()=>{m.textContent='';},8000);
+}
+
+async function saveJobPrefs(){
+  const b=$('#jobs-pref-save'),msg=$('#jobs-pref-msg');
+  b.disabled=true;msg.textContent='AI 分析中…';
+  try{const r=await fetch('/api/jobs/prefs',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:$('#jobs-pref').value})}).then(x=>x.json());
+    if(r.ok){msg.textContent='✓ 已存,下次掃描生效(可按重新掃描立即套用)';
+      const a=$('#jobs-pref-analyzed');
+      if(r.analyzed){a.style.display='block';a.textContent='🧠 AI 理解的配對標準:\n'+r.analyzed;}
+      else a.style.display='none';}
+    else msg.textContent='存檔失敗';
+  }catch(e){msg.textContent='存檔失敗:'+e;}
+  b.disabled=false;setTimeout(()=>{msg.textContent='';},6000);
+}
+
+async function showJD(btn){
+  const box=btn.closest('.panel').querySelector('.jd-box');
+  if(box.style.display==='block'){box.style.display='none';btn.textContent='📄 看中文說明';return;}
+  box.style.display='block';box.textContent='抓取職缺說明並翻譯中…(約10-30秒)';
+  btn.disabled=true;
+  try{
+    const r=await fetch('/api/jobs/jd',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({key:btn.dataset.key})}).then(x=>x.json());
+    if(r.ok&&(r.jd_zh||r.jd)) box.textContent=r.jd_zh||r.jd;
+    else box.textContent=r.note||'抓不到說明,點「查看職缺」看原頁';
+  }catch(e){box.textContent='讀取失敗,再試一次';}
+  btn.disabled=false;btn.textContent='📄 收合說明';
+}
+
+async function applyJob(btn){
+  const url=btn.dataset.url,title=btn.dataset.title;
+  btn.disabled=true;btn.textContent='📨 開啟投遞視窗…';
+  const r=await fetch('/api/jobs/apply',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({url,title})}).then(x=>x.json()).catch(()=>null);
+  if(r&&r.ok){btn.textContent='📨 投遞視窗已開(看你的螢幕)';
+    setTimeout(()=>{btn.textContent='📨 再投一次';btn.disabled=false;},8000);}
+  else{btn.textContent='📨 幫我投遞';btn.disabled=false;alert('開啟失敗');}
+}
+
+async function rescanJobs(){
+  const b=$('#jobs-rescan');b.disabled=true;b.textContent='掃描中…(約1分鐘)';
+  try{const r=await fetch('/api/jobs/rescan',{method:'POST'}).then(x=>x.json());
+    if(!r.ok)alert('掃描失敗:'+(r.error||''));}
+  catch(e){alert('掃描逾時,稍後重新整理看結果');}
+  b.disabled=false;b.textContent='🔄 重新掃描';loadJobs();
 }
 $('#nav').onclick=e=>{const a=e.target.closest('.nav-i');if(!a)return;switchPage(a.dataset.p);};
 async function loadArchCount(){try{const d=await get('/api/memory');const fs=(d&&(d.facts||d))||[];const el=$('#arch-memn');if(el)el.textContent='('+fs.length+' 筆固定事實)';}catch(e){}}
@@ -720,6 +934,21 @@ async function loadBrain(){
       ['累計訊息',ev.hermes_messages||0],['記憶事實',ev.fact_count||0],['工具',ev.tools_count||0],
     ].map(([k,v])=>`<div class="stat"><b>${esc(''+v)}</b><span>${esc(k)}</span></div>`).join('');
     $('#evo-skills').innerHTML=(ev.skills_recent||[]).map(s=>`<span class="skill" title="${esc(s.desc||'')}">${esc(s.name)}</span>`).join('')||'<span style="color:var(--dim)">—</span>';
+  }catch(e){}
+  // 2.5) 主動關懷心跳
+  try{const hb=await get('/api/heartbeat');const box=$('#heartbeat-box');
+    if(!hb||!hb.job){box.innerHTML='<div style="color:var(--dim)">尚未排程</div>';}
+    else{const j=hb.job;
+      const fmtT=t=>t?new Date(t).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
+      box.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+          <div class="stat"><b>${esc(j.schedule||'—')}</b><span>排程</span></div>
+          <div class="stat"><b>${fmtT(j.next_run_at)}</b><span>下次判斷</span></div>
+          <div class="stat"><b style="color:${j.enabled?'#3affa0':'#667'}">${j.enabled?'運作中':'已暫停'}</b><span>狀態</span></div>
+        </div>
+        <div style="font-size:12px;color:var(--dim);margin-bottom:4px">上次判斷（${fmtT(j.last_run_at)}）：</div>
+        <div style="padding:9px 12px;border-radius:8px;background:rgba(6,14,24,.5);border:1px solid ${j.last_spoke?'color-mix(in srgb,var(--gold) 35%,#0a1622)':'color-mix(in srgb,var(--cy) 18%,#0a1622)'};font-size:13px;color:${j.last_spoke?'#ffe9a8':'var(--dim)'}">
+          ${j.last_decision?esc(j.last_decision):'（還沒執行過）'}</div>`;
+    }
   }catch(e){}
   // 3) 全部工具
   try{const t=await get('/api/tools_all');
@@ -1225,6 +1454,28 @@ function renderExpenses(){
     +(rows||'<div class="empty">還沒有生活開銷</div>')
     +`<div style="display:flex;gap:9px;margin-top:12px"><button class="btn" onclick="fin.expenses.unshift({amount:0,category:'其他',note:'',date:new Date().toISOString().slice(0,10)});renderExpenses()">＋ 手動加一筆</button><button class="btn solid" onclick="saveExpenses()">儲存</button></div>`;}
 async function saveExpenses(){const r=await send('/api/finance/expenses','PUT',{items:fin.expenses.filter(e=>+e.amount>0)});if(r&&r.ok){toast('生活開銷已儲存');loadFinance(true);}else toast('儲存失敗');}
+
+// ===== 花費區間查詢（fin-range 面板：代理 8809 /expenses_range，跟語音同一個端點）=====
+function rngPreset(days){const iso=n=>new Date(Date.now()-n*864e5).toISOString().slice(0,10);$('#rng-start').value=iso(days);$('#rng-end').value=iso(0);queryExpRange();}
+async function queryExpRange(){
+  const s=$('#rng-start').value,e=$('#rng-end').value,el=$('#rng-result');
+  if(!s){toast('先選起始日期');return;}
+  el.innerHTML='<div class="empty">查詢中…</div>';
+  const d=await get('/api/expenses_range?start='+encodeURIComponent(s)+'&end='+encodeURIComponent(e||s));
+  if(!d||!d.ok){el.innerHTML='<div class="empty">查詢失敗（8809 沒回應），稍後再試</div>';return;}
+  if(!(d.items||[]).length){el.innerHTML=`<div class="empty">${esc(d.start)} ～ ${esc(d.end)} 沒有記到任何花費</div>`;return;}
+  const rows=d.items.map(it=>`<div class="item">
+    <span style="flex:0 0 92px;font-family:var(--mono);font-size:12px;color:var(--dimer)">${esc(it.date)}</span>
+    <span style="flex:0 0 46px;font-family:var(--mono);font-size:12px;color:var(--dim)">${esc(it.time||'')}</span>
+    <span style="flex:0 0 64px">${esc(it.category)}</span>
+    <span class="txt">${esc(it.note||'')}</span>
+    <span style="flex:0 0 84px;text-align:right;font-family:var(--mono);font-weight:700;color:var(--gold)">$${fmt(it.amount)}</span></div>`).join('');
+  const cats=Object.entries(d.by_category||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="pill">${esc(k)} <b style="color:var(--gold);font-family:var(--mono)">$${fmt(v)}</b></span>`).join('');
+  el.innerHTML=`<div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin-bottom:10px">
+    <span style="font-family:var(--mono);font-size:27px;font-weight:800;color:var(--cy);text-shadow:0 0 12px rgba(0,229,255,.4)">$${fmt(d.total)}</span>
+    <span style="color:var(--dim);font-size:13px">${esc(d.start)} ～ ${esc(d.end)}，共 ${d.count} 筆</span></div>
+    ${cats?`<div style="margin-bottom:8px">${cats}</div>`:''}${rows}`;
+}
 function numv(el){const n=parseFloat((el.innerText||'').replace(/[^0-9.\-]/g,''));return isFinite(n)?n:0;}
 
 // ===== 記帳分析（JARVIS HUD 風格）=====
