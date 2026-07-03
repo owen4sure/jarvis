@@ -821,11 +821,17 @@ async function researchJob(btn){
 async function dismissJob(btn){
   const key=btn.dataset.key,title=btn.dataset.title;
   btn.disabled=true;
+  // ✕ = 永久不再出現:加進 dislike(負樣本)。若在追蹤中,也一併從追蹤清單移除。
   const r=await fetch('/api/jobs/dismiss',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({key,title})}).then(x=>x.json()).catch(()=>null);
+  if(savedKeys.has(key)){
+    await fetch('/api/jobs/save',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({key})}).catch(()=>{});   // save 是 toggle,已追蹤的再打=取消追蹤
+    savedKeys.delete(key);$('#saved-count').textContent=savedKeys.size;
+  }
   if(r&&r.ok){const card=btn.closest('.panel');card.style.transition='.25s';card.style.opacity='0';card.style.transform='scale(.95)';
     setTimeout(()=>{card.remove();const n=$$('#jobs-list .panel').length;
-      if(!n)$('#jobs-list').innerHTML='<div class="empty">都看完了,明天中午有新的會推 Telegram</div>';},260);}
+      if(!n)$('#jobs-list').innerHTML='<div class="empty">都看完了'+(jobsTab==='saved'?'':',明天中午有新的會推 Telegram')+'</div>';},260);}
   else{btn.disabled=false;alert('刪除失敗,再試一次');}
 }
 
@@ -1566,7 +1572,7 @@ const SKILL_DETAIL={
   update_finance:{n:'改財務設定',d:'改存錢目標、薪水、加減持股。',e:['這個月改存7000','薪水變4萬','賣掉台積電']},
   set_reminder:{n:'設提醒',d:'設提醒，可指定提前多久、用語音或Telegram通知。',e:['明天下午3點提醒我開會','每天早上8點吃藥']},
   query_reminders:{n:'查提醒',d:'看有哪些提醒、幾個過期。',e:['我有哪些提醒','幾個提醒']},
-  find_nearby:{n:'找附近地點',d:'找你附近或某地點的餐廳、咖啡廳、超商，還會看現在有沒有開。',e:['新埔捷運站附近有沒有好吃的','附近的便利商店']},
+  find_nearby:{n:'找附近地點',d:'找你附近或某地點的餐廳、咖啡廳、超商，還會看現在有沒有開。',e:['捷運站附近有沒有好吃的','附近的便利商店']},
   get_weather_free:{n:'查天氣',d:'查即時天氣。',e:['今天天氣怎樣','明天會下雨嗎']},
   search_web:{n:'上網查',d:'查最新新聞、即時價格、某人某公司近況等記憶裡沒有的事。',e:['台積電現在股價','最近有什麼新聞']},
   get_news:{n:'查新聞',d:'看最新新聞。',e:['有什麼新聞']},

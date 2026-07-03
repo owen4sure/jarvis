@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-YTDLP = "/Users/chenyouwei/Hermes_Brain/.venv/bin/yt-dlp"
+YTDLP = "/Users/USERNAME/Hermes_Brain/.venv/bin/yt-dlp"
 app = FastAPI(title="Hermes Music Service (Chrome)")
 
 

@@ -4,7 +4,7 @@
 set -e
 export IDF_PATH=~/esp/esp-idf
 export IDF_PYTHON_CHECK_CONSTRAINTS=no
-IDFENV=/Users/chenyouwei/.espressif/python_env/idf5.5_py3.9_env
+IDFENV=/Users/USERNAME/.espressif/python_env/idf5.5_py3.9_env
 # 工具鏈 bin（xtensa gcc 等）
 TOOLBIN=$(find ~/.espressif/tools -type d -name bin 2>/dev/null | tr '\n' ':')
 export PATH="$IDFENV/bin:$IDF_PATH/tools:${TOOLBIN}$PATH"

@@ -10,7 +10,7 @@ import json
 import os
 from datetime import datetime, timedelta
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/moods.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/moods.json"
 
 _SCORE_LABELS = {1: "很差", 2: "不好", 3: "普通", 4: "不錯", 5: "很棒"}
 

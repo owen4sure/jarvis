@@ -23,7 +23,7 @@ The actual condition-checking logic for each `type` lives in
 import json
 import os
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/watchers.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/watchers.json"
 
 SUPPORTED_TYPES = ("crypto", "stock", "earthquake", "typhoon", "flight", "late_night_checkin")
 

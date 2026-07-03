@@ -15,7 +15,7 @@ import json
 import os
 from datetime import datetime, timedelta
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/expenses.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/expenses.json"
 
 
 def _load():

@@ -16,7 +16,7 @@
 
 ## 啟動方式
 ```bash
-cd /Users/chenyouwei/Hermes_Brain
+cd /Users/USERNAME/Hermes_Brain
 ./.venv/bin/python -m scripts.embodied_daemon
 ```
 

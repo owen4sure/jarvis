@@ -12,7 +12,7 @@ same storage if needed later.
 import json
 import os
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/checklists.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/checklists.json"
 
 DEFAULT_LIST_NAME = "out"
 DEFAULT_ITEMS = ["鑰匙", "錢包", "手機", "悠遊卡"]

@@ -1,7 +1,7 @@
 """Claude Code bridge for self-development.
 
 Allows the Telegram bot to invoke Claude Code as a subprocess to implement
-new features. Restricted to /Users/chenyouwei/Hermes_Brain only.
+new features. Restricted to /Users/USERNAME/Hermes_Brain only.
 """
 
 import os
@@ -10,14 +10,14 @@ import threading
 import time
 from typing import Callable
 
-CLAUDE_BIN = "/Users/chenyouwei/.local/bin/claude"
-HERMES_DIR = "/Users/chenyouwei/Hermes_Brain"
+CLAUDE_BIN = "/Users/USERNAME/.local/bin/claude"
+HERMES_DIR = "/Users/USERNAME/Hermes_Brain"
 TIMEOUT_SECONDS = 600  # 10 minutes max
 
 _SYSTEM_PROMPT = """你是 Hermes Brain 的功能開發助理。
 
 硬性規則：
-1. 只能讀寫 /Users/chenyouwei/Hermes_Brain 目錄內的檔案，絕對不可動其他目錄
+1. 只能讀寫 /Users/USERNAME/Hermes_Brain 目錄內的檔案，絕對不可動其他目錄
 2. 新指令要整合進 modules/remote/commands.py 的 COMMAND_TABLE
 3. 新模組放在對應的 modules/ 子目錄
 4. 不可修改 config/keys.json 等機密設定檔

@@ -31,8 +31,8 @@ from modules.remote import pending_queue
 from modules.embodied.llm_fallback import BrainUnavailable
 
 
-PLAUD_INBOX_DIR = "/Users/chenyouwei/Hermes_Brain/memory/plaud_inbox"
-PLAUD_REPORTS_DIR = "/Users/chenyouwei/Hermes_Brain/memory/plaud_reports"
+PLAUD_INBOX_DIR = "/Users/USERNAME/Hermes_Brain/memory/plaud_inbox"
+PLAUD_REPORTS_DIR = "/Users/USERNAME/Hermes_Brain/memory/plaud_reports"
 
 # 每個聊天的最近幾輪對話（chat_id → deque[(使用者, Jarvis)]），給多輪 follow-up 用
 import collections as _collections
@@ -207,7 +207,7 @@ def dispatch(text, ctx):
             "HANDOFF_NOTES.md": "近期學習紀錄與坑點總結",
         }
         for filename, description in project_files.items():
-            filepath = os.path.join("/Users/chenyouwei/Hermes_Brain", filename)
+            filepath = os.path.join("/Users/USERNAME/Hermes_Brain", filename)
             if os.path.exists(filepath):
                 try:
                     with open(filepath, "r", encoding="utf-8") as f:

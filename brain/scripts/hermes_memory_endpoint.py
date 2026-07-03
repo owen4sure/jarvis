@@ -260,7 +260,7 @@ _MEM_SECTIONS = [
     ("🎨 偏好 & 習慣", ["喜歡", "討厭", "習慣", "最愛", "口味", "顏色", "音樂", "播放",
                     "開工", "興趣", "愛吃", "愛喝", "運動", "健身", "睡覺", "起床", "每天都"]),
     ("👥 人際關係", ["女朋友", "男朋友", "老婆", "老公", "朋友", "家人", "媽媽", "爸爸",
-                  "小美", "同事", "哥哥", "姐姐", "弟弟", "妹妹", "主管", "女友", "男友", "親戚"]),
+                  "小燕子", "同事", "哥哥", "姐姐", "弟弟", "妹妹", "主管", "女友", "男友", "親戚"]),
     ("🤖 對 Jarvis 的期待", ["希望你", "要你", "Jarvis", "賈維斯", "助理", "風格", "幕僚",
                           "你要主動", "你應該", "我要你", "提醒我要"]),
 ]
@@ -496,6 +496,35 @@ async def reminder_cancel(req: Request):
     return JSONResponse({"ok": False, "reason": "找不到相符的提醒"})
 
 
+def _match_expenses(q, items):
+    """花費專用比對:把查詢拆成「品項文字＋金額」分開對(整串子字串比對會被
+    「note 類別 45.0」這種候選格式打敗——「測試飲料45元」永遠對不上)。
+    金額對 amount、剩餘文字對 note/類別;兩者有給就都要中。"""
+    import re as _re
+    qs = (q or "").strip()
+    if not qs:
+        return []
+    m = _re.search(r"(\d+(?:\.\d+)?)", qs)
+    amt = float(m.group(1)) if m else None
+    text = _re.sub(r"\d+(?:\.\d+)?\s*(?:元|塊|塊錢)?", " ", qs)
+    for w in ("那筆", "這筆", "剛剛", "剛才", "今天", "昨天", "記錯", "的",
+              "花費", "支出", "消費", "把", "刪掉", "刪除", "取消"):
+        text = text.replace(w, " ")
+    text = text.strip()
+    out = []
+    for e in items:
+        if amt is not None and abs(float(e.get("amount", 0)) - amt) > 0.001:
+            continue
+        if text:
+            hay = f"{e.get('note', '')}{e.get('category', '')}"
+            if not (text in hay or any(tok and tok in hay for tok in text.split())):
+                continue
+        if amt is None and not text:
+            continue  # 什麼線索都沒有 → 不亂配
+        out.append(e)
+    return out
+
+
 @app.post("/expense_delete")
 async def expense_delete(req: Request):
     """語音「刪掉那筆X花費／剛記錯了那筆X」用。"""
@@ -506,8 +535,10 @@ async def expense_delete(req: Request):
     q = str((body or {}).get("query", "")).strip()
     from modules.productivity import expense_tracker as et
     recent = list(reversed(et.list_recent(days=21)))  # 最近的優先比對
-    ms = _match_all(
-        q, recent, lambda e: f"{e.get('note', '')} {e.get('category', '')} {e.get('amount', '')}")
+    ms = _match_expenses(q, recent)
+    if not ms:  # 新比對沒中,退回舊的整串比對(保留原行為當保險)
+        ms = _match_all(
+            q, recent, lambda e: f"{e.get('note', '')} {e.get('category', '')} {e.get('amount', '')}")
     if len(ms) > 1:
         return JSONResponse({"ok": False, "multiple": True,
                              "reason": "有多筆相符的花費：" + "、".join(f"{e.get('category','')}{int(e.get('amount',0))}元" for e in ms[:5]) + "，請說清楚是哪一筆(可講金額)"})
@@ -732,7 +763,7 @@ async def reminder(req: Request):
             if fire:
                 if not msg and extracted:
                     msg = _t2t(extracted)
-                # 清掉訊息開頭的「日期範圍殘留」(例如「10/23-26要回台中」被抓走10/23後，剩「-26要回台中」)。
+                # 清掉訊息開頭的「日期範圍殘留」(例如「10/23-26要出差」被抓走10/23後，剩「-26要出差」)。
                 msg = re.sub(r"^\s*[-~–到至]\s*\d{1,2}(?:\s*[/月]\s*\d{1,2})?\s*[日號]?\s*", "", msg)
                 # 清掉訊息尾巴的「提早N天/提前N天…提醒我」「提醒我」殘句，讓提醒內容乾淨。
                 msg = re.sub(r"[,，、]?\s*(?:提早|提前|前)\s*[0-9一二兩三四五六七八九十]+\s*天(?:再|先)?(?:提醒我)?", "", msg)
@@ -774,6 +805,24 @@ async def reminder(req: Request):
             pass
     try:
         from modules.productivity import reminder_manager as rm
+        # 冪等去重:同「訊息+時間+重複」已存在就不重記(語音/Telegram/模型工具可能各記一次;
+        # bridge 逾時後模型又補記會雙筆——這裡擋掉)。
+        try:
+            for _ex in rm.list_reminders():
+                if (str(_ex.get("message", "")) == msg and str(_ex.get("time", "")) == t
+                        and str(_ex.get("repeat", "")) == str(repeat)):
+                    _dn = t
+                    if str(repeat).startswith("once:"):
+                        try:
+                            _dd = datetime.datetime.strptime(repeat[5:], "%Y-%m-%d")
+                            _dn = "%d/%d %s" % (_dd.month, _dd.day, t)
+                        except Exception:
+                            pass
+                    return JSONResponse({"ok": True, "time": t, "message": msg,
+                                         "repeat": repeat, "dedup": True,
+                                         "nice": f"這個已經記過了（{_dn}：{msg}）。"})
+        except Exception:
+            pass
         rm.add_reminder(t, msg, repeat=repeat, lead_minutes=lead, channel=channel)
         # 提早「幾天」通知（重要日子）：事件前 N 天另排一筆早上 9 點的提早通知。
         # advance_days 可以是數字(3) 或清單([3,1])，幫你前 3 天、前 1 天各提醒一次。
@@ -851,6 +900,40 @@ async def reminder(req: Request):
 _LAST_EXPENSE: dict = {}  # (amount, note) -> ts，90 秒內同筆視為重複(防確定性攔截與模型雙記)
 
 
+def _parse_nl_date(s: str):
+    """自然語言日期 → YYYY-MM-DD。「今天/昨天/前天/7月2號/7/2/2026-07-02」全吃;
+    無年份且日期在未來 → 指去年。解析不了回 None(呼叫端自行決定預設)。
+    鐵則:任何吃日期的端點都用這個,別要求模型傳 ISO(它不會乖)。"""
+    s = (s or "").strip()
+    if not s:
+        return None
+    _now = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Taipei"))
+    if s in ("今天", "today"):
+        return _now.strftime("%Y-%m-%d")
+    if s in ("昨天", "yesterday"):
+        return (_now - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    if s == "前天":
+        return (_now - datetime.timedelta(days=2)).strftime("%Y-%m-%d")
+    m = re.search(r"(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})", s)
+    if m:
+        y, mo, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        m = re.search(r"(\d{1,2})\s*[/月]\s*(\d{1,2})", s)
+        if not m:
+            return None
+        mo, dd = int(m.group(1)), int(m.group(2))
+        y = _now.year
+        try:
+            if datetime.date(y, mo, dd) > _now.date():
+                y -= 1
+        except ValueError:
+            return None
+    try:
+        return datetime.date(y, mo, dd).strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
 # ---------- 智能分類（記帳唯一收口點:語音/Telegram/reconciler/dashboard 全部經過這裡）----------
 _CANON_CATS = ("餐飲", "超商", "超市", "交通", "購物", "娛樂", "訂閱", "醫療", "其他")
 _CAT_RULES = [  # 順序有意義:商家優先於品項(在 7-11 買咖啡仍算超商)
@@ -911,9 +994,10 @@ async def expense(req: Request):
         note = _t2t(_note) if isinstance(_note, str) else ""
         # 【智能分類】模型常把品項當分類(「午餐」「7-11」)→ 正規化成固定類別,品項保留進 note
         category, note = _smart_category(category, note)
-        # 回溯記帳：使用者說「昨天/前天/X號花了」時帶絕對日期 YYYY-MM-DD,沒帶就記今天。
-        _date = str((b or {}).get("date", "")).strip()[:10]
-        date = _date if re.match(r"^\d{4}-\d{2}-\d{2}$", _date) else None
+        # 回溯記帳：使用者說「昨天/前天/X號花了」→ 任何日期格式都解析(昨天/7月2號/7/2/ISO),
+        # 解析不了才記今天。之前只認嚴格 ISO → 模型傳「7月2號」被默默丟掉、記成今天(踩過)。
+        _date_raw = str((b or {}).get("date", "")).strip()
+        date = _parse_nl_date(_date_raw) if _date_raw else None
         from modules.productivity import expense_tracker as et
         # 去重：90 秒內同金額同品項已記過就跳過(proxy 確定性攔截 + 模型都記時只留一筆)。
         import time as _tm
@@ -1057,8 +1141,10 @@ def expenses_summary_ep(date: str = ""):
     try:
         from modules.finance import wealth
         x = wealth.load_expenses()
-        today = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d")
-        target = (date or "").strip()[:10] or today   # 指定日期,沒給就今天
+        _now = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Taipei"))
+        today = _now.strftime("%Y-%m-%d")
+
+        target = _parse_nl_date(date) or (date or "").strip()[:10] or today  # 任何格式,沒給就今天
         is_today = (target == today)
         _when = f"今天（{target}）" if is_today else target   # 今天附日期,指定日就只顯示一次
 
@@ -1095,6 +1181,89 @@ def expenses_summary_ep(date: str = ""):
     except Exception as e:
         print(f"[expenses_summary] {e}")
         return JSONResponse({"ok": False, "text": "查花費明細時出了點問題，等等再問我一次"})
+
+
+def _load_expense_items():
+    """讀出全部單筆花費。優先走 wealth 模組(記帳唯一收口)，模組載不到就直接讀 config/expenses.json。"""
+    try:
+        from modules.finance import wealth
+        return list(wealth.load_expenses() or [])
+    except Exception:
+        p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "config", "expenses.json")
+        try:
+            with open(p, encoding="utf-8") as f:
+                d = json.load(f)
+            return list(d.get("expenses", []) if isinstance(d, dict) else d)
+        except Exception as e:
+            print(f"[expenses_range] load error: {e}")
+            return []
+
+
+def _range_bounds(start: str, end: str):
+    """把 start/end(任何格式:今天/昨天/7月1號/YYYY-MM-DD)解析成 (起, 迄)。
+    只給 start → 查單日；都沒給 → 今天。起迄顛倒自動對調。"""
+    today = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d")
+    s = _parse_nl_date(start) or (start or "").strip()[:10] or today
+    e = _parse_nl_date(end) or (end or "").strip()[:10] or s
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", s) or not re.match(r"^\d{4}-\d{2}-\d{2}$", e):
+        return None, None
+    return (e, s) if s > e else (s, e)
+
+
+@app.get("/expenses_range")
+def expenses_range_ep(start: str = "", end: str = ""):
+    """日期範圍查詢單筆消費明細：回傳範圍內每一筆的 日期/分類/金額/品項 + 總額 +
+    逐日小計 + 分類小計。給語音(query_expense_range)和 dashboard 用。
+    排除「之前花費」補登調整——那不是真的當日消費。"""
+    try:
+        s, e = _range_bounds(start, end)
+        if not s:
+            return JSONResponse({"ok": False,
+                                 "text": "日期我沒看懂，可以說「7月1號到7月3號」或給 YYYY-MM-DD"})
+
+        def _amt(it):
+            try:
+                return float(it.get("amount") or 0)
+            except (TypeError, ValueError):
+                return 0.0
+        items = sorted(
+            (it for it in _load_expense_items()
+             if s <= str(it.get("date", ""))[:10] <= e and it.get("category") != "之前花費"),
+            key=lambda it: (str(it.get("date", "")), str(it.get("time", ""))))
+        total = sum(_amt(it) for it in items)
+        by_date, by_cat = {}, {}
+        for it in items:
+            d = str(it.get("date", ""))[:10]
+            c = it.get("category") or "其他"
+            by_date[d] = by_date.get(d, 0) + _amt(it)
+            by_cat[c] = by_cat.get(c, 0) + _amt(it)
+        # 口語摘要：單日直接列逐筆；跨日先講總額再逐日小計(細項在 items 裡，大腦要念可自己撈)
+        _when = s if s == e else f"{s} 到 {e}"
+        if not items:
+            text = f"{_when}沒有記到任何花費"
+        elif s == e:
+            detail = "、".join(f"{it.get('category', '其他')} {int(_amt(it))}元"
+                               + (f"（{it.get('note')}）" if it.get('note') else "")
+                               for it in items)
+            text = f"{_when}共花 {int(total)} 元、{len(items)} 筆：{detail}"
+        else:
+            days = "、".join(f"{d} 花 {int(v)}元" for d, v in sorted(by_date.items()))
+            cats = "、".join(f"{k} {int(v)}元" for k, v in
+                             sorted(by_cat.items(), key=lambda kv: -kv[1]))
+            text = (f"{_when}共花 {int(total)} 元、{len(items)} 筆。"
+                    f"逐日：{days}。分類：{cats}")
+        # 明細只回乾淨欄位，不外洩內部 id 以外的雜項
+        detail_items = [{"id": it.get("id"), "date": str(it.get("date", ""))[:10],
+                         "time": it.get("time", ""), "category": it.get("category") or "其他",
+                         "amount": _amt(it), "note": it.get("note", "")} for it in items]
+        return JSONResponse({"ok": True, "start": s, "end": e, "total": int(total),
+                             "count": len(items), "text": text,
+                             "by_date": by_date, "by_category": by_cat,
+                             "items": detail_items})
+    except Exception as ex:
+        print(f"[expenses_range] {ex}")
+        return JSONResponse({"ok": False, "text": "查花費區間明細時出了點問題，等等再試一次"})
 
 
 # ========== 財富管理（理財）==========
@@ -1304,7 +1473,7 @@ def email_pending_ep():
 
 
 def _himalaya_send(draft: dict):
-    msg = (f"From: Owen Chen (Your Name) <{_MY_EMAIL}>\nTo: {draft['to']}\n"
+    msg = (f"From: Your Name <{_MY_EMAIL}>\nTo: {draft['to']}\n"
            f"Subject: {draft['subject']}\n\n{draft['body']}\n")
     try:
         import subprocess as _sp
@@ -1495,17 +1664,38 @@ def _focused_finance_answer(q: str, d: dict, pf: dict):
                   if e.get("category") != "之前花費"
                   and str(e.get("date", "")).startswith(_dtf.date.today().strftime("%Y-%m"))]
 
-    # 1h) 昨天花多少（功能16）
-    if any(k in q for k in ("昨天", "昨日")) and any(k in q for k in ("花", "消費", "花費", "用了", "買")):
-        _yd = (_dtf.date.today() - _dtf.timedelta(days=1)).isoformat()
+    # 1h) 某一天花多少（昨天/前天/N月N號/ISO）——確定性直答,別讓模型拿本期總額搪塞。
+    # 日期一律走共用 _parse_nl_date(Asia/Taipei 時區 + 未來回推去年),不自己再寫一份。
+    _day_ask = any(k in q for k in ("花", "消費", "花費", "用了", "買"))
+    _target_day = None
+    _day_label = ""
+    if _day_ask:
+        import re as _re_d
+        if any(k in q for k in ("昨天", "昨日")):
+            _target_day, _day_label = _parse_nl_date("昨天"), "昨天"
+        elif "前天" in q:
+            _target_day, _day_label = _parse_nl_date("前天"), "前天"
+        else:
+            # 明確日期形(2026-07-02 / 7月2號)——無歧義,直接解析
+            _m = _re_d.search(r"\d{4}[-/年]\d{1,2}[-/月]\d{1,2}", q) \
+                or _re_d.search(r"\d{1,2}\s*月\s*\d{1,2}\s*[號日]", q)
+            if _m:
+                _target_day, _day_label = _parse_nl_date(_m.group(0)), _m.group(0)
+            else:
+                # 裸「N/N」有歧義:排除店名(7/11)與分數(1/3的、1/2了)才當日期
+                _sm = _re_d.search(r"(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)", q)
+                if (_sm and _sm.group(0) not in ("7/11", "7-11")
+                        and q[_sm.end():_sm.end() + 1] != "的"):
+                    _target_day, _day_label = _parse_nl_date(_sm.group(0)), _sm.group(0)
+    if _target_day:
         items = [e for e in d.get("expenses", [])
-                 if str(e.get("date", ""))[:10] == _yd and e.get("category") != "之前花費"]
+                 if str(e.get("date", ""))[:10] == _target_day and e.get("category") != "之前花費"]
         if not items:
-            return f"你昨天（{_yd[5:]}）沒有記到任何花費。"
+            return f"你{_day_label}（{_target_day[5:]}）沒有記到任何花費。"
         tot = int(sum(float(e.get("amount") or 0) for e in items))
         detail = "、".join(f"{e.get('category', '其他')} {int(float(e.get('amount') or 0))}元"
                            + (f"（{e.get('note')}）" if e.get('note') else "") for e in items)
-        return f"你昨天花了 {tot} 元，共 {len(items)} 筆：{detail}。（照唸這些數字。）"
+        return f"你{_day_label}花了 {tot} 元，共 {len(items)} 筆：{detail}。（照唸這些數字。）"
 
     # 1i) 美金匯率（功能17）— 用投資模組的即時匯率，不讓模型憑記憶報舊價
     if any(k in q for k in ("匯率", "美金多少", "美元多少", "美金現在", "換美金", "美元兌")):
@@ -1865,9 +2055,9 @@ def finance_project_ep(target: float = 4000000, years: float = 0, target_age: in
         # 固定每月投入：用自訂值，否則用「發薪先存」(= 他每月唯一固定投資的錢)
         m_fixed = float(monthly) if monthly and monthly > 0 else auto_saved
         m_max = max(0.0, income - fixed)               # 理論上限(收入−固定開銷,等於完全不花變動)
-        # 年數一律【從生日算】(使用者生日見下行設定)→ 模型亂傳 years 也不會錯。
+        # 年數一律【從生日算】(Owen 2001/02/21生)→ 模型亂傳 years 也不會錯。
         # 只有明確沒給 target_age 又給了 years(例如「還有3年」)才用 years。
-        bday = _dt.date(2000, 1, 1)  # ← 換成你的生日(算「距目標年齡幾年」用)
+        bday = _dt.date(2001, 2, 21)
         today = _dt.date.today()
         age = today.year - bday.year - ((today.month, today.day) < (bday.month, bday.day))
         if target_age and target_age > age:
@@ -2473,8 +2663,8 @@ def agent_results_ep():
 
 # ---------- 自我擴充：缺功能時，直接調用 Claude Code 把它做出來 ----------
 _build_lock = __import__("threading").Lock()
-_CLAUDE_BIN = "/Users/chenyouwei/.local/bin/claude"
-_HB_DIR = "/Users/chenyouwei/Hermes_Brain"
+_CLAUDE_BIN = "/Users/USERNAME/.local/bin/claude"
+_HB_DIR = "/Users/USERNAME/Hermes_Brain"
 
 
 def _run_build_feature(description: str):
@@ -2483,13 +2673,13 @@ def _run_build_feature(description: str):
     prompt = (
         "你是 Hermes（Owen 的桌上 StackChan AI 語音助理）的工程師。"
         "Owen 想要一個目前還沒有的能力：「" + description + "」。請【實際動手·全棧】把它做出來並串接好，不要只給建議。\n"
-        "【① 後端】需要的邏輯或外部 API 放 /Users/chenyouwei/Hermes_Brain/scripts/hermes_memory_endpoint.py"
+        "【① 後端】需要的邏輯或外部 API 放 /Users/USERNAME/Hermes_Brain/scripts/hermes_memory_endpoint.py"
         "（FastAPI，port 8809，新增 @app 端點；資料存 config/ 下的 json）。\n"
-        "【② 語音工具】對話工具放 /Users/chenyouwei/xiaozhi-server/patches/hermes_tools.py"
+        "【② 語音工具】對話工具放 /Users/USERNAME/xiaozhi-server/patches/hermes_tools.py"
         "（用 @register_function 仿照現有 set_reminder / find_nearby，內部 http 打 http://host.docker.internal:8809），"
-        "並把工具名加進 /Users/chenyouwei/xiaozhi-server/data/.config.yaml 的 Intent.function_call.functions 清單。\n"
-        "【③ Dashboard·務必做】在 /Users/chenyouwei/Hermes_Brain/dashboard/index.html 加一個對應的區塊/面板顯示這個功能"
-        "（仿照現有 panel 的寫法與 --cy/--gold 等 CSS 變數風格），並在 /Users/chenyouwei/Hermes_Brain/dashboard/hermes_dashboard.py"
+        "並把工具名加進 /Users/USERNAME/xiaozhi-server/data/.config.yaml 的 Intent.function_call.functions 清單。\n"
+        "【③ Dashboard·務必做】在 /Users/USERNAME/Hermes_Brain/dashboard/index.html 加一個對應的區塊/面板顯示這個功能"
+        "（仿照現有 panel 的寫法與 --cy/--gold 等 CSS 變數風格），並在 /Users/USERNAME/Hermes_Brain/dashboard/hermes_dashboard.py"
         "加一個 /api 代理端點轉發到 8809，讓 Owen 在控制台(localhost:8811)就看得到、用得到。這步不能跳過。\n"
         "【④ 自我驗證】寫完後自己用 python -c 或 curl 快速驗證新端點/函式能跑、不報錯；有錯就修到好。\n"
         "架構風格要跟現有程式碼一致（繁體中文註解、小函式、錯誤處理）。"
@@ -2503,11 +2693,11 @@ def _run_build_feature(description: str):
                     description, _dt.datetime.now(_TZTW).isoformat()))
             # 【安全閘·改碼前備份】build_feature 會用 acceptEdits 無人監督改這幾個關鍵檔。先全備份，
             # 建完做冒煙測試(Python 語法 + YAML 合法),壞了就自動還原,絕不讓自我進化把語音助理弄掛。
-            _safe_files = ["/Users/chenyouwei/xiaozhi-server/patches/hermes_tools.py",
-                           "/Users/chenyouwei/Hermes_Brain/scripts/hermes_memory_endpoint.py",
-                           "/Users/chenyouwei/xiaozhi-server/data/.config.yaml",
-                           "/Users/chenyouwei/Hermes_Brain/dashboard/index.html",
-                           "/Users/chenyouwei/Hermes_Brain/dashboard/hermes_dashboard.py"]
+            _safe_files = ["/Users/USERNAME/xiaozhi-server/patches/hermes_tools.py",
+                           "/Users/USERNAME/Hermes_Brain/scripts/hermes_memory_endpoint.py",
+                           "/Users/USERNAME/xiaozhi-server/data/.config.yaml",
+                           "/Users/USERNAME/Hermes_Brain/dashboard/index.html",
+                           "/Users/USERNAME/Hermes_Brain/dashboard/hermes_dashboard.py"]
             _bak = {}
             for _f in _safe_files:
                 try:
@@ -2538,7 +2728,7 @@ def _run_build_feature(description: str):
                 rr = _sp.run(
                     # --add-dir 授權跨目錄改 xiaozhi-server(語音工具+config)；--allowedTools 讓它能自我驗證。
                     [_CLAUDE_BIN, "-p", p, "--permission-mode", "acceptEdits",
-                     "--add-dir", "/Users/chenyouwei/xiaozhi-server",
+                     "--add-dir", "/Users/USERNAME/xiaozhi-server",
                      "--allowedTools", "Edit", "Write", "Read",
                      "Bash(python3:*)", "Bash(curl:*)", "Bash(grep:*)"],
                     cwd=_HB_DIR, capture_output=True, text=True, timeout=tmo)
@@ -2959,7 +3149,7 @@ def _self_location():
 import time as _time_mod
 _device = {"last_seen": 0.0}
 _action_log = []
-_SS_CACHE = "/Users/chenyouwei/Hermes_Brain/memory/last_self_state.txt"
+_SS_CACHE = "/Users/USERNAME/Hermes_Brain/memory/last_self_state.txt"
 
 
 @app.post("/device_ping")
@@ -2991,7 +3181,7 @@ def self_state_ep(channel: str = "語音"):
         enabled = []
         try:
             import yaml as _yaml
-            cfg = _yaml.safe_load(open("/Users/chenyouwei/xiaozhi-server/data/.config.yaml", encoding="utf-8"))
+            cfg = _yaml.safe_load(open("/Users/USERNAME/xiaozhi-server/data/.config.yaml", encoding="utf-8"))
             enabled = (cfg.get("Intent", {}).get("function_call", {}).get("functions", [])) or []
         except Exception:
             pass
@@ -3165,7 +3355,7 @@ def water_recent_ep(days: int = 7):
 
 @app.get("/holiday")
 def holiday_ep(q: str = ""):
-    """查台灣連假/國定假日(官方辦公日曆)。q=整句話(例如「10/23-26要回台中顧摩卡,那時有連假嗎?」)。
+    """查台灣連假/國定假日(官方辦公日曆)。q=整句話(例如「10/23-26要出差,那時有連假嗎?」)。
     順便:若句子裡有「行程/計畫」(不是純問放假)→ 自動幫忙記下來+提早提醒(治本:不靠 agent 呼叫第二個工具)。"""
     try:
         from modules.productivity import tw_holiday as h

@@ -7,7 +7,7 @@ import datetime
 import zoneinfo
 from collections import defaultdict
 
-_DIR = "/Users/chenyouwei/Hermes_Brain/config"
+_DIR = "/Users/USERNAME/Hermes_Brain/config"
 EXP = os.path.join(_DIR, "expenses.json")
 FIN = os.path.join(_DIR, "finance.json")
 TZ = zoneinfo.ZoneInfo("Asia/Taipei")

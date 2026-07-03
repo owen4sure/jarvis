@@ -8,7 +8,7 @@ place to change the MQTT broker address, topic prefix, ports, etc.
 import json
 import os
 
-BASE_DIR = "/Users/chenyouwei/Hermes_Brain"
+BASE_DIR = "/Users/USERNAME/Hermes_Brain"
 CONFIG_PATH = os.path.join(BASE_DIR, "config", "embodied.json")
 
 

@@ -18,7 +18,7 @@ import json
 import os
 from datetime import datetime
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/sleep.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/sleep.json"
 
 DEFAULT_TARGET_BEDTIME = "23:00"
 

@@ -166,7 +166,7 @@ def check_resilience():
 
 def check_hermes_agent():
     try:
-        r = subprocess.run(["/Users/chenyouwei/.local/bin/hermes", "-z", "回一個字：好"],
+        r = subprocess.run(["/Users/USERNAME/.local/bin/hermes", "-z", "回一個字：好"],
                            capture_output=True, text=True, timeout=90)
         reply = (r.stdout or "").strip().splitlines()[-1] if r.stdout.strip() else ""
         bad = ("API call failed", "failed after", "Traceback", "Error:")

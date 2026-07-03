@@ -20,7 +20,7 @@ import os
 
 from modules.embodied.gemini_client import GeminiClient
 
-STATE_PATH = "/Users/chenyouwei/Hermes_Brain/config/quiz_state.json"
+STATE_PATH = "/Users/USERNAME/Hermes_Brain/config/quiz_state.json"
 
 
 def _load():

@@ -36,7 +36,7 @@ from modules.productivity.plaud_style.integrator import PlaudIntegrator
 from modules.productivity.research_module import ResearchModule
 from scripts.key_manager import KeyManager
 
-PLAUD_REPORTS_DIR = "/Users/chenyouwei/Hermes_Brain/memory/plaud_reports"
+PLAUD_REPORTS_DIR = "/Users/USERNAME/Hermes_Brain/memory/plaud_reports"
 
 # 排除非聊天用模型（embedding/語音/圖像/影片等）
 _MODEL_EXCLUDE_KEYWORDS = ("embedding", "tts", "veo", "live", "image", "audio")
@@ -495,7 +495,7 @@ def _format_watcher_line(w):
 
 
 def _cwa_not_configured_note():
-    if os.path.exists("/Users/chenyouwei/Hermes_Brain/config/cwa.json"):
+    if os.path.exists("/Users/USERNAME/Hermes_Brain/config/cwa.json"):
         return ""
     return (
         "\n⚠️ 尚未設定 config/cwa.json，暫時不會觸發。"

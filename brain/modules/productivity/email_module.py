@@ -31,7 +31,7 @@ from email.header import decode_header
 
 from modules.embodied.gemini_client import GeminiClient
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/email.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/email.json"
 
 
 class EmailNotConfiguredError(Exception):

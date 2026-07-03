@@ -146,25 +146,31 @@ def fetch_104():
         with sync_playwright() as pw:
             b = pw.chromium.launch(headless=True,
                                    args=["--disable-blink-features=AutomationControlled"])
-            pg = b.new_page(user_agent=UA)
-            for term in _search_terms(["AI 產品", "AI 導入"]):
-                try:
-                    q = urllib.parse.quote(term)
-                    pg.goto(f"https://www.104.com.tw/jobs/search/?keyword={q}&order=16",
-                            timeout=40000)
-                    pg.wait_for_timeout(6000)   # 等 CF 過 + 卡渲染
-                    for j in pg.evaluate(_JS):
-                        u = j.get("url", "")
-                        if u and u not in seen and j.get("title"):
-                            seen.add(u)
-                            out.append({"source": "104", "title": j["title"],
-                                        "company": j.get("company", ""),
-                                        "loc": j.get("loc", ""), "salary": j.get("salary", ""),
-                                        "tags": [], "url": u,
-                                        "is_foreign": bool(j.get("is_foreign"))})
-                except Exception as e:
-                    print(f"[104:{term}] {e}", file=sys.stderr)
-            b.close()
+            try:
+                pg = b.new_page(user_agent=UA)
+                for term in _search_terms(["AI 產品", "AI 導入"]):
+                    try:
+                        q = urllib.parse.quote(term)
+                        pg.goto(f"https://www.104.com.tw/jobs/search/?keyword={q}&order=16",
+                                timeout=40000)
+                        # 等職缺卡渲染(CF 過完就出現),最多 8s——比死睡 6s 快、且不會卡滿
+                        try:
+                            pg.wait_for_selector("a[href*='/job/']", timeout=8000)
+                        except Exception:
+                            pass  # 沒等到就照抓當下 DOM(可能被 CF 擋,evaluate 回空)
+                        for j in pg.evaluate(_JS):
+                            u = j.get("url", "")
+                            if u and u not in seen and j.get("title"):
+                                seen.add(u)
+                                out.append({"source": "104", "title": j["title"],
+                                            "company": j.get("company", ""),
+                                            "loc": j.get("loc", ""), "salary": j.get("salary", ""),
+                                            "tags": [], "url": u,
+                                            "is_foreign": bool(j.get("is_foreign"))})
+                    except Exception as e:
+                        print(f"[104:{term}] {e}", file=sys.stderr)
+            finally:
+                b.close()   # 例外時也一定關瀏覽器,不留殭屍 Chromium
     except Exception as e:
         print(f"[104] {e}", file=sys.stderr)
     return out

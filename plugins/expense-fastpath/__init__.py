@@ -35,13 +35,45 @@ import urllib.request
 logger = logging.getLogger(__name__)
 
 _ENDPOINT = "http://127.0.0.1:8809/expense_auto"
+_REMINDER_ENDPOINT = "http://127.0.0.1:8809/reminder"
 
 # One regex does gating AND item/amount extraction (no second re-parse):
 #   group 1 = item (non-greedy so trailing digits land in group 2)
 #   group 2 = amount (2-6 digits)
 #   optional trailing 元/塊
 _PATTERN = re.compile(r"^([一-龥A-Za-z][一-龥A-Za-z0-9 ]{0,9}?)\s*(\d{2,6})\s*(?:元|塊)?$")
-_QUESTION = re.compile(r"[?？嗎]")
+
+# Reminder/event fast-path: record deterministically when a message clearly
+# schedules a FUTURE event, because flash-lite often replies "記下來了" without
+# ever calling the tool. Trigger requires a concrete future-DAY word (not bare
+# 今天/N點, which are ambiguous and over-match) OR an explicit 提醒. Questions and
+# spending lines are excluded so statements like「明天幾點開會」(a question) and
+#「明天大約要買東西」don't create bogus reminders. /reminder is the final gate.
+_DAY_MARK = re.compile(
+    r"明天|後天|大後天|下週[一二三四五六日天]?|下星期[一二三四五六日天]?|"
+    r"下周[一二三四五六日天]?|本週[一二三四五六日天]|這週[一二三四五六日天]|"
+    r"本周[一二三四五六日天]|星期[一二三四五六日天]|禮拜[一二三四五六日天]|"
+    r"週[一二三四五六日天]|\d{1,2}\s*月\s*\d{1,2}")
+_EVENT_INTENT = re.compile(
+    r"比賽|球賽|會議|開會|約會|預約|有約|約了|約人|面試|聚餐|報告|繳費|生日|演唱會|"
+    r"回診|看醫生|吃飯|見面|活動|典禮|婚禮|出差|考試|截止|報名|訂位|上課|演出|表演|"
+    r"聚會|派對|健檢|體檢|婚宴|開幕|回台|返鄉")
+_QUESTION = re.compile(r"[?？]|嗎|呢|幾點|幾號|幾月|什麼時候|何時|哪天|多久|是不是|如何")
+_EXPENSE_HINT = re.compile(r"花了|花費|塊錢|\d+\s*元|\d+\s*塊")
+
+
+def _looks_like_reminder(t: str) -> bool:
+    """Conservative gate: schedules a future event? (day-word or 提醒) + event
+    intent, not a question, not a spending line, not too long."""
+    if not t or len(t) > 40 or _EXPENSE_HINT.search(t) or _QUESTION.search(t):
+        return False
+    if any(w in t for w in ("取消", "刪", "不用")):
+        return False
+    # 「提醒我/提醒你」才算明確排程指令(排除「開會要提醒大家」這種非排程句);
+    # 或有具體未來日期詞。兩者之一 + 事件意圖(或本來就是「提醒我…」)才攔。
+    remind_me = ("提醒我" in t) or ("提醒你" in t)
+    has_trigger = remind_me or bool(_DAY_MARK.search(t))
+    return has_trigger and bool(_EVENT_INTENT.search(t) or remind_me)
 
 
 def _record(clean_message: str) -> bool:
@@ -57,23 +89,41 @@ def _record(clean_message: str) -> bool:
             data=json.dumps({"message": clean_message}).encode(),
             headers={"Content-Type": "application/json"},
         )
-        resp = json.loads(urllib.request.urlopen(req, timeout=3).read())
+        resp = json.loads(urllib.request.urlopen(req, timeout=2).read())
         return bool(resp.get("recorded"))
     except Exception as exc:
         logger.warning("expense-fastpath record failed (%s) — falling through", exc)
         return False
 
 
-async def _send_confirmation(gateway, source, item: str, amount: str) -> None:
-    """Fire-and-forget confirmation via the platform adapter's own send()
-    (gets markdown/chunking/thread handling; not a raw bot call)."""
+def _record_reminder(text: str):
+    """POST to /reminder; the endpoint's own parser is the gate. Returns the
+    human-readable confirmation string only when it parsed a real future time."""
+    try:
+        req = urllib.request.Request(
+            _REMINDER_ENDPOINT,
+            data=json.dumps({"time": text, "message": "", "channel": "both"}).encode(),
+            headers={"Content-Type": "application/json"})
+        resp = json.loads(urllib.request.urlopen(req, timeout=2).read())
+        if resp.get("ok") and (resp.get("time") or resp.get("repeat")):
+            return resp.get("nice") or resp.get("text") or "好，記下了"
+    except Exception as exc:
+        logger.warning("reminder fast-path failed (%s) — falling through", exc)
+    return None
+
+
+async def _send_text(gateway, source, content: str) -> None:
+    """Fire-and-forget reply via the platform adapter's own send()."""
     try:
         adapter = getattr(gateway, "adapters", {}).get(source.platform)
         if adapter is not None and source.chat_id:
-            await adapter.send(chat_id=str(source.chat_id),
-                               content=f"好，{item} {amount} 元記下了。")
+            await adapter.send(chat_id=str(source.chat_id), content=content)
     except Exception as exc:
-        logger.warning("expense-fastpath confirmation send failed: %s", exc)
+        logger.warning("fast-path reply send failed: %s", exc)
+
+
+async def _send_confirmation(gateway, source, item: str, amount: str) -> None:
+    await _send_text(gateway, source, f"好，{item} {amount} 元記下了。")
 
 
 def _on_pre_gateway_dispatch(event=None, gateway=None, session_store=None, **_kwargs):
@@ -84,24 +134,18 @@ def _on_pre_gateway_dispatch(event=None, gateway=None, session_store=None, **_kw
 
     text = (getattr(event, "text", "") or "").strip()
     # Text-only: captioned photos/documents carry media_urls — never intercept
-    # them (that would drop the image).
-    if not text or len(text) > 16 or "\n" in text or getattr(event, "media_urls", None):
+    # them (that would drop the image). Questions never fast-path.
+    if not text or "\n" in text or getattr(event, "media_urls", None):
         return None
     if _QUESTION.search(text):
         return None
-
-    match = _PATTERN.match(text)
-    if not match:
-        return None
-    item, amount = match.group(1).strip(), match.group(2)
 
     source = getattr(event, "source", None)
     if source is None:
         return None
 
-    # SECURITY GATE — only the authorized owner may fast-path a record.
-    # Non-owners fall through to the normal auth/pairing flow (and are NOT
-    # recorded). If we can't verify, we don't fast-path.
+    # SECURITY GATE — only the authorized owner may fast-path. Non-owners fall
+    # through to the normal auth/pairing flow. If we can't verify, don't fast-path.
     authorized = getattr(gateway, "_is_user_authorized", None)
     if not callable(authorized):
         return None
@@ -120,18 +164,29 @@ def _on_pre_gateway_dispatch(event=None, gateway=None, session_store=None, **_kw
     except Exception:
         pass  # clarify unavailable → proceed; pending clarify is a rare edge
 
-    # Record synchronously so skip-vs-fallthrough reflects the real outcome.
-    if not _record(f"{item} {amount}"):
-        return None  # not recorded → let the agent handle it, nothing lost
+    def _skip_after(coro):
+        try:
+            asyncio.get_running_loop().create_task(coro)
+        except RuntimeError:
+            pass  # no running loop → skip reply, still short-circuit the pipeline
 
-    # Recorded → confirm asynchronously (reply failure can't cause a re-record).
-    try:
-        asyncio.get_running_loop().create_task(
-            _send_confirmation(gateway, source, item, amount))
-    except RuntimeError:
-        pass  # no running loop → skip reply, still short-circuit the pipeline
+    # ── Path 1: expense (short "item + amount") ──────────────────────────────
+    m = _PATTERN.match(text) if len(text) <= 16 else None
+    if m:
+        item, amount = m.group(1).strip(), m.group(2)
+        if _record(f"{item} {amount}"):   # sync → skip/fallthrough reflects reality
+            _skip_after(_send_confirmation(gateway, source, item, amount))
+            return {"action": "skip", "reason": "expense-fastpath"}
+        return None
 
-    return {"action": "skip", "reason": "expense-fastpath"}
+    # ── Path 2: reminder / event (conservative gate; /reminder is the final gate) ──
+    if _looks_like_reminder(text):
+        nice = _record_reminder(text)
+        if nice:
+            _skip_after(_send_text(gateway, source, nice))
+            return {"action": "skip", "reason": "reminder-fastpath"}
+
+    return None  # nothing matched → normal agent dispatch
 
 
 def register(ctx) -> None:

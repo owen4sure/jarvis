@@ -11,7 +11,7 @@ from datetime import datetime, date, timedelta
 import zoneinfo
 
 TZ = zoneinfo.ZoneInfo("Asia/Taipei")
-CACHE_DIR = "/Users/chenyouwei/Hermes_Brain/config"
+CACHE_DIR = "/Users/USERNAME/Hermes_Brain/config"
 SRC = "https://raw.githubusercontent.com/ruyut/TaiwanCalendar/master/data/{year}.json"
 
 

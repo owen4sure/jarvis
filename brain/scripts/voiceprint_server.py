@@ -29,7 +29,7 @@ from fastapi.responses import JSONResponse
 # Config
 # ---------------------------------------------------------------------------
 PORT = 8807
-STORE_DIR = Path("/Users/chenyouwei/.hermes/voiceprints")
+STORE_DIR = Path("/Users/USERNAME/.hermes/voiceprints")
 STORE_DIR.mkdir(parents=True, exist_ok=True)
 TARGET_SR = 16000
 MIN_SAMPLES = TARGET_SR // 2  # require >= 0.5s of audio

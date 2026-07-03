@@ -323,7 +323,7 @@ _DEFAULT_MODEL = "gemini-2.5-flash"
 
 # GLM（免費公益分組）：OpenAI 相容端點，走串流才快。金鑰/網址放 ~/.hermes/.env。
 _GLM_KEY = ""
-_GLM_BASE = "https://88888.qzz.io"
+_GLM_BASE = "https://your-llm-relay.example.com"
 try:
     for _l in open(os.path.expanduser("~/.hermes/.env"), encoding="utf-8"):
         if _l.startswith("GLM_API_KEY"):

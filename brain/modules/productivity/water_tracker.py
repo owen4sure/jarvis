@@ -8,7 +8,7 @@ import json
 import os
 from datetime import datetime
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/water.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/water.json"
 
 
 def _load():

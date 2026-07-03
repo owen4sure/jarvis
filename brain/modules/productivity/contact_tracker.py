@@ -17,7 +17,7 @@ import json
 import os
 from datetime import datetime
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/contacts.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/contacts.json"
 
 
 def _load():

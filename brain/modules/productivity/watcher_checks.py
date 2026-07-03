@@ -23,7 +23,7 @@ STOCK_QUOTE_URL = "https://stooq.com/q/l/?s={symbol}&f=sd2t2c&h&e=csv"
 
 # Free registration at https://opendata.cwa.gov.tw/ -> config/cwa.json:
 #   {"api_key": "CWA-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
-CWA_CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/cwa.json"
+CWA_CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/cwa.json"
 CWA_EARTHQUAKE_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0015-001"
 CWA_TYPHOON_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/W-C0034-005"
 

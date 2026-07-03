@@ -7,13 +7,13 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/chenyouwei/Hermes_Brain/.venv/bin/python</string>
+        <string>/Users/USERNAME/Hermes_Brain/.venv/bin/python</string>
         <string>-u</string>
-        <string>/Users/chenyouwei/Hermes_Brain/scripts/llm_proxy.py</string>
+        <string>/Users/USERNAME/Hermes_Brain/scripts/llm_proxy.py</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/chenyouwei/Hermes_Brain</string>
+    <string>/Users/USERNAME/Hermes_Brain</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -25,9 +25,9 @@
     <integer>10</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/chenyouwei/Hermes_Brain/memory/logs/llm_proxy.log</string>
+    <string>/Users/USERNAME/Hermes_Brain/memory/logs/llm_proxy.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/chenyouwei/Hermes_Brain/memory/logs/llm_proxy.log</string>
+    <string>/Users/USERNAME/Hermes_Brain/memory/logs/llm_proxy.log</string>
 </dict>
 </plist>

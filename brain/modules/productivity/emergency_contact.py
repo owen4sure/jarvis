@@ -15,7 +15,7 @@ Storage: `config/emergency_contact.json`:
 import json
 import os
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/emergency_contact.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/emergency_contact.json"
 
 
 def _load():

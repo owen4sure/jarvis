@@ -42,7 +42,7 @@ import os
 import re
 from datetime import datetime
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/reminders.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/reminders.json"
 
 _REPEAT_PATTERN = re.compile(
     r"^(daily|weekly:[0-6]|monthly:(0?[1-9]|[12][0-9]|3[01])|"

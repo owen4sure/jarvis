@@ -9,7 +9,7 @@ class KeyManager:
     並在鎖內重新載入，避免多程序（proxy / gemini_client / memory / research）互相覆蓋。
     report_error 可指定「實際用的那把 key 的 index」，避免併發下冷卻到錯的 key。"""
 
-    def __init__(self, config_path='/Users/chenyouwei/Hermes_Brain/config/keys.json'):
+    def __init__(self, config_path='/Users/USERNAME/Hermes_Brain/config/keys.json'):
         self.config_path = config_path
         self.lock_path = config_path + '.lock'
         self.config = self._load_config()

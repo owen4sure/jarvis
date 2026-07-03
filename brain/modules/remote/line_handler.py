@@ -28,7 +28,7 @@ import urllib.request
 
 from .base_handler import BaseRemoteHandler
 
-BASE_DIR = "/Users/chenyouwei/Hermes_Brain"
+BASE_DIR = "/Users/USERNAME/Hermes_Brain"
 CONFIG_PATH = os.path.join(BASE_DIR, "config", "line.json")
 
 

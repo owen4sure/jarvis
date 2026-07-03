@@ -1666,7 +1666,13 @@ def _write_saved(d):
 @app.get("/api/jobs/saved")
 def list_saved():
     d = _load_saved()
-    jobs = sorted(d.values(), key=lambda x: x.get("saved_ts", ""), reverse=True)
+    try:
+        with open(os.path.join(_JOBS_DIR, "job_dislikes.json"), encoding="utf-8") as f:
+            dislikes = json.load(f)
+    except Exception:
+        dislikes = {}
+    jobs = [j for j in d.values() if j.get("key") not in dislikes]  # 被✕過的不留在追蹤
+    jobs = sorted(jobs, key=lambda x: x.get("saved_ts", ""), reverse=True)
     return JSONResponse({"ok": True, "jobs": jobs})
 
 

@@ -16,3 +16,5 @@ __pycache__/
 *.pyc
 .venv/
 .DS_Store
+*.bin
+brain/firmware/*/merged-binary.bin

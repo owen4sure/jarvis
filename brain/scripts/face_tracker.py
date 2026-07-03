@@ -18,7 +18,7 @@ from pathlib import Path
 
 import cv2
 
-DATA = Path("/Users/chenyouwei/xiaozhi-server/data")
+DATA = Path("/Users/USERNAME/xiaozhi-server/data")
 IMG = DATA / "last_camera.jpg"
 FLAG = DATA / "find_face.flag"
 CMD = DATA / "head_cmd.json"

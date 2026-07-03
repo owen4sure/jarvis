@@ -13,7 +13,7 @@ import json
 import os
 from datetime import datetime
 
-CONFIG_PATH = "/Users/chenyouwei/Hermes_Brain/config/activity.json"
+CONFIG_PATH = "/Users/USERNAME/Hermes_Brain/config/activity.json"
 
 
 def record_activity():

@@ -31,7 +31,7 @@ import os
 import re
 import urllib.request
 
-BASE_DIR = "/Users/chenyouwei/Hermes_Brain"
+BASE_DIR = "/Users/USERNAME/Hermes_Brain"
 CREDENTIALS_PATH = os.path.join(BASE_DIR, "config", "google_credentials.json")
 TOKEN_PATH = os.path.join(BASE_DIR, "config", "google_token.json")
 ICS_CONFIG_PATH = os.path.join(BASE_DIR, "config", "calendar_ics.json")

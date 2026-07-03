@@ -15,7 +15,7 @@ import urllib.request
 import datetime
 import zoneinfo
 
-_DIR = "/Users/chenyouwei/Hermes_Brain/config"
+_DIR = "/Users/USERNAME/Hermes_Brain/config"
 FIN = os.path.join(_DIR, "finance.json")
 EXP = os.path.join(_DIR, "expenses.json")
 TZ = zoneinfo.ZoneInfo("Asia/Taipei")

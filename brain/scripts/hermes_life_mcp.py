@@ -6,7 +6,7 @@ Hermes 生活工具 MCP Server
 
 每個工具只是轉呼叫既有的本機端點（8809 記憶/財務/提醒、8810 音樂），不重造邏輯。
 用 stackchan-mcp 的 venv 跑（它已有 mcp 套件）：
-  /Users/chenyouwei/.local/share/uv/tools/stackchan-mcp/bin/python3 hermes_life_mcp.py
+  /Users/USERNAME/.local/share/uv/tools/stackchan-mcp/bin/python3 hermes_life_mcp.py
 掛上去：
   hermes mcp add hermes-life --url http://127.0.0.1:8769/mcp
 """
@@ -89,7 +89,8 @@ def set_wealth_goal(target: float = 0, target_age: int = 0) -> str:
 
 @mcp.tool()
 def query_expenses(date: str = "") -> str:
-    """查花費明細：今天/某天花了什麼、各分類多少。預算問題(每天還能花)要用 query_finance。date 留空=今天。"""
+    """查花費明細：今天/某天花了什麼、各分類多少。預算問題(每天還能花)要用 query_finance。
+    date 留空=今天;接受任何格式:「昨天」「前天」「7月2號」「7/2」「2026-07-02」都行,把使用者講的日期原樣傳入。"""
     u = f"{MEM}/expenses_summary"
     if date:
         u += "?date=" + urllib.parse.quote(date)
@@ -98,9 +99,12 @@ def query_expenses(date: str = "") -> str:
 
 
 @mcp.tool()
-def add_expense(amount: float, note: str = "", category: str = "") -> str:
-    """Owen 報出「東西+金額」(茶碗蒸36)就記一筆花費。他在問價/聊天/假設(這貴嗎)就別記。amount=元，note=品項，category=分類(可空)。"""
-    d = _post(f"{MEM}/expense", {"amount": amount, "note": note, "category": category})
+def add_expense(amount: float, note: str = "", category: str = "", date: str = "") -> str:
+    """Owen 報出「東西+金額」(茶碗蒸36)就記一筆花費。他在問價/聊天/假設(這貴嗎)就別記。
+    amount=元，note=品項，category=分類(可空)。
+    date=【重要】他說「昨天/前天/7月2號的宵夜」這種補記時,一定要把他講的日期原樣帶入
+    (昨天/7月2號/7/2 任何格式都行);沒提日期就留空=今天。"""
+    d = _post(f"{MEM}/expense", {"amount": amount, "note": note, "category": category, "date": date})
     if d.get("ok"):
         return f"好，記下了 {int(amount)} 元" + (f"（{note}）" if note else "")
     return d.get("error") or "記帳失敗"
@@ -283,6 +287,19 @@ def play_music(query: str) -> str:
     if d.get("ok"):
         return f"好，幫你放「{query}」"
     return d.get("error") or "放音樂失敗"
+
+
+@mcp.tool()
+def music_status() -> str:
+    """查現在有沒有在放音樂、放的是哪首。當 Owen 問「現在在放什麼」「有在放音樂嗎」時用。
+    只查狀態、絕不會開始播放。"""
+    import json as _j
+    import urllib.request as _u
+    try:
+        d = _j.loads(_u.urlopen(f"{MUSIC}/status", timeout=6).read())
+        return d.get("text") or ("有音樂在放" if d.get("playing") else "現在沒有在放音樂")
+    except Exception:
+        return "查不到播放狀態"
 
 
 @mcp.tool()
@@ -474,7 +491,7 @@ def draft_email(to: str, body: str, subject: str = "") -> str:
          但仍要簡潔到位、不要長篇大論、不要文謅謅。(重點:開頭 Hi、結尾 Thanks 很親切，但中間內文要客氣尊重。)
       3. 結尾：簡短 —— 英文「Thanks,」或「Best,」；中文信也用「Thanks,」或「謝謝，」（外商常這樣）。
          【不要用「敬祝 順心」「此致 敬禮」「順頌 商祺」這種正式敬語】。
-      4. 署名：英文信「Owen Chen」；中文信「Your Name」。【不要加「敬上」】。
+      4. 署名：英文信「Your Name」；中文信「Your Name」。【不要加「敬上」】。
     信件語言：Owen 用英文交代／對方英文情境（英文名、國外信箱）→ 整封英文；中文情境 → 中文。
     不要用表情符號。若 Owen 只給重點，你負責擴寫成得體、但不囉唆的信。
 
@@ -630,6 +647,255 @@ def save_to_desktop(filename: str, content: str) -> str:
     """把文字內容存成 Owen 桌面上的檔案。filename 例「點子.md」。"""
     r = _post("http://127.0.0.1:8811/api/save_file", {"filename": filename, "content": content})
     return f"存好了，在桌面的 {filename}" if r.get("ok") else "存檔沒成功"
+
+
+@mcp.tool()
+def speak_proactively(text: str) -> str:
+    """【只在你自己主動判斷值得開口時用】把一句話排進 StackChan 的語音佇列，等機器人有連線
+    就會自己開口說出來（裝置沒連線/離線時安全略過，不會出錯、不會補講）。
+    用在你的心跳排程判斷「現在該關心一下 Owen」之後——這樣不只 Telegram 收得到文字，
+    在家時機器人也會自己開口講，像真的在乎他、會主動找他聊天的夥伴。
+    text 就是你決定要說的那句話（跟你回給 Telegram 的內容一致）。"""
+    r = _post(f"{MEM}/push_voice", {"text": text})
+    return "已排進語音佇列" if r.get("ok") else "排入失敗(不影響 Telegram 那邊)"
+
+
+@mcp.tool()
+def find_jobs() -> str:
+    """查工作雷達最新配對結果。當 Owen 問「有什麼新工作/幫我找工作/最近有適合的職缺嗎」時用。
+    資料來自每日自動爬蟲(Yourator+LinkedIn,按他的履歷輪廓評分),不是現爬。"""
+    import json as _j
+    try:
+        d = _j.load(open("/Users/USERNAME/Hermes_Brain/config/job_matches.json", encoding="utf-8"))
+    except Exception:
+        return "工作雷達還沒跑過第一輪,中午12:35會自動掃,或叫我現在手動掃一次"
+    top = (d.get("top") or [])[:5]
+    if not top:
+        return "目前榜上沒有達標的職缺"
+    lines = [f"最新一輪({d.get('updated','')})前五名:"]
+    for j in top:
+        sal = f"、{j['salary']}" if j.get("salary") else ""
+        fit = f"適配{j['fit']}%," if j.get("fit") is not None else ""
+        why = f",{j['reason']}" if j.get("reason") else ""
+        lines.append(f"{fit}{j['title']},{j['company']},{j['loc']}{sal}{why}")
+    lines.append("完整清單在 dashboard 的工作頁,不喜歡的可以按叉叉,每天中午有新的會推 Telegram")
+    return "。".join(lines)
+
+
+def _find_job(query: str):
+    """用公司名/職稱模糊找一筆職缺(先找追蹤清單,再找推薦榜)。回 (job, 來源) 或 (None, 錯誤訊息)。"""
+    import json as _j
+    q = (query or "").strip().lower()
+    if not q:
+        return None, "要告訴我哪一個職缺(公司或職稱)"
+    pools = []
+    try:
+        d = _j.load(urllib.request.urlopen("http://127.0.0.1:8811/api/jobs/saved", timeout=6))
+        pools.append(("追蹤中", d.get("jobs") or []))
+    except Exception:
+        pass
+    try:
+        d = _j.load(urllib.request.urlopen("http://127.0.0.1:8811/api/jobs", timeout=6))
+        pools.append(("推薦榜", d.get("jobs") or []))
+    except Exception:
+        pass
+    toks = [t for t in q.replace("的", " ").split() if t]
+    for src, jobs in pools:
+        # 計分制:命中詞數最多者勝(「google ai advocate」不能因為人人都有 ai 就變多筆)
+        scored = []
+        for j in jobs:
+            hay = (j.get("title", "") + j.get("title_zh", "") + j.get("company", "")).lower()
+            n = sum(1 for t in toks if t in hay)
+            if n:
+                scored.append((n, j))
+        if not scored:
+            continue
+        best = max(n for n, _ in scored)
+        hits = [j for n, j in scored if n == best]
+        if len(hits) == 1:
+            return hits[0], src
+        names = "、".join(f"{h['company']}的{h['title'][:20]}" for h in hits[:4])
+        return None, f"有好幾個相符:{names}。講清楚是哪一家?"
+    return None, "找不到這個職缺,先問我「有什麼新工作」看清單"
+
+
+@mcp.tool()
+def my_followed_jobs() -> str:
+    """列出 Owen【已追蹤】的職缺清單(不是推薦榜)。他問「我追蹤了哪些/我關注的工作」時用。"""
+    import json as _j
+    try:
+        d = _j.load(urllib.request.urlopen("http://127.0.0.1:8811/api/jobs/saved", timeout=6))
+        jobs = d.get("jobs") or []
+    except Exception:
+        return "追蹤清單讀不到,等等再試"
+    if not jobs:
+        return "你還沒追蹤任何職缺。想追蹤就說「追蹤那個X的缺」"
+    lines = []
+    for j in jobs[:8]:
+        fit = f"適配{j['fit']}%," if j.get("fit") is not None else ""
+        r = "(已深度研究過,可以問我結論)" if j.get("research") else ""
+        lines.append(f"{j['company']}的{j['title'][:28]},{fit}{j.get('saved_ts','')}追蹤{r}")
+    return f"你追蹤了 {len(jobs)} 個:" + "。".join(lines)
+
+
+@mcp.tool()
+def job_details(query: str) -> str:
+    """看某個職缺的完整說明(中文)。Owen 說「那個X的工作內容是什麼/詳情/JD」時用。
+    query=公司名或職稱關鍵字。"""
+    import json as _j
+    job, src = _find_job(query)
+    if not job:
+        return src
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:8811/api/jobs/jd",
+            data=_j.dumps({"key": job["key"]}).encode(),
+            headers={"Content-Type": "application/json"})
+        d = _j.loads(urllib.request.urlopen(req, timeout=90).read())
+        jd = (d.get("jd_zh") or d.get("jd") or "").strip()
+    except Exception:
+        jd = ""
+    head = (f"{job['title']}｜{job['company']}｜{job.get('loc','')}"
+            f"{'｜'+job['salary'] if job.get('salary') else ''}"
+            f"｜適配{job['fit']}%" if job.get("fit") is not None else "")
+    return head + "。" + (jd[:1500] if jd else "說明內文抓不到,連結:" + job.get("url", ""))
+
+
+@mcp.tool()
+def follow_job(query: str) -> str:
+    """把職缺加進追蹤清單(=dashboard 的⭐關注)。Owen 說「幫我追蹤/關注/存起來那個X」時用。"""
+    import json as _j
+    job, src = _find_job(query)
+    if not job:
+        return src
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:8811/api/jobs/save",
+            data=_j.dumps({"key": job["key"]}).encode(),
+            headers={"Content-Type": "application/json"})
+        d = _j.loads(urllib.request.urlopen(req, timeout=30).read())
+        if d.get("ok"):
+            return (f"好,{job['company']}的「{job['title'][:30]}」"
+                    + ("追蹤了,之後可以叫我深度分析它" if d.get("saved") else "取消追蹤了"))
+    except Exception:
+        pass
+    return "沒存成,等等再試"
+
+
+@mcp.tool()
+def dismiss_job(query: str) -> str:
+    """把職缺標成不喜歡(以後不再推類似的)。Owen 說「那個X我不要/不喜歡/刪掉」時用。"""
+    import json as _j
+    job, src = _find_job(query)
+    if not job:
+        return src
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:8811/api/jobs/dismiss",
+            data=_j.dumps({"key": job["key"], "title": job.get("title", "")}).encode(),
+            headers={"Content-Type": "application/json"})
+        d = _j.loads(urllib.request.urlopen(req, timeout=15).read())
+        if d.get("ok"):
+            return f"好,{job['company']}那個缺以後不推了,也會避開類似的"
+    except Exception:
+        pass
+    return "沒標成,等等再試"
+
+
+@mcp.tool()
+def research_job(query: str) -> str:
+    """對職缺做深度研究(公司風評/薪資行情/JD跟Owen履歷的差距+補強/面試準備)。
+    Owen 說「幫我研究/分析那個X」時用。研究要1-2分鐘,會先回覆開始了,做完主動傳給他。"""
+    import json as _j
+    import threading
+    job, src = _find_job(query)
+    if not job:
+        return src
+    key, title, comp = job["key"], job.get("title", ""), job.get("company", "")
+
+    def _bg():
+        try:
+            # 沒追蹤才自動追蹤(save 端點是 toggle,已追蹤的再打會被取消——先查再存)
+            saved = _j.load(urllib.request.urlopen(
+                "http://127.0.0.1:8811/api/jobs/saved", timeout=8))
+            if key not in {x.get("key") for x in (saved.get("jobs") or [])}:
+                urllib.request.urlopen(urllib.request.Request(
+                    "http://127.0.0.1:8811/api/jobs/save",
+                    data=_j.dumps({"key": key}).encode(),
+                    headers={"Content-Type": "application/json"}), timeout=30).read()
+            req = urllib.request.Request(
+                "http://127.0.0.1:8811/api/jobs/research",
+                data=_j.dumps({"key": key}).encode(),
+                headers={"Content-Type": "application/json"})
+            d = _j.loads(urllib.request.urlopen(req, timeout=420).read())
+            text = (f"🔬 {comp}「{title[:40]}」研究好了:\n\n" + d["research"]) if d.get("ok") \
+                else f"🔬 {comp} 那個缺研究失敗({d.get('error','')}),再叫我試一次"
+        except Exception as e:
+            text = f"🔬 {comp} 研究中斷({str(e)[:40]}),再叫我試一次"
+        try:
+            import sys as _sys
+            _sys.path.insert(0, "/Users/USERNAME/Hermes_Brain")
+            from modules.remote.telegram_handler import TelegramHandler
+            cfg = _j.load(open("/Users/USERNAME/Hermes_Brain/config/telegram.json"))
+            h = TelegramHandler()
+            for uid in cfg.get("allowed_user_ids", []):
+                h.send_message(uid, text[:3800])
+        except Exception:
+            pass
+
+    threading.Thread(target=_bg, daemon=True).start()
+    return (f"開始研究 {comp} 的「{title[:30]}」了(公司風評/薪資/跟你履歷的差距/面試準備),"
+            f"大概一兩分鐘,好了直接傳到你的 Telegram")
+
+
+def _device_tool(name: str, args: dict) -> dict:
+    """打 xiaozhi 的 /mcp/device_tool(走活著的裝置 MCP session;韌體 force 直連後
+    stackchan-mcp 8770 已不可用,大腦的裝置控制一律走這條)。token 每次讀檔,換 token 免重啟。"""
+    import json as _j
+    import urllib.request as _u
+    try:
+        tok = open("/Users/USERNAME/xiaozhi-server/data/device_tool_token", encoding="utf-8").read().strip()
+        req = _u.Request(
+            "http://127.0.0.1:8003/mcp/device_tool",
+            data=_j.dumps({"name": name, "args": args}).encode(),
+            headers={"Content-Type": "application/json", "X-Device-Token": tok})
+        return _j.loads(_u.urlopen(req, timeout=15).read())
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:80]}
+
+
+@mcp.tool()
+def robot_look(yaw: int = 0, pitch: int = 45) -> str:
+    """轉動 StackChan 機器人的頭。yaw:水平角度(-90左~90右,0正面)、pitch:垂直(5低頭~85抬頭,45平視)。
+    「看我/看前面」=yaw 0 pitch 45;「抬頭」=pitch 70;「低頭」=pitch 20;「看左邊」=yaw -45。"""
+    r = _device_tool("self.robot.set_head_angles", {"yaw": int(yaw), "pitch": int(pitch)})
+    if r.get("ok"):
+        return "好，頭轉過去了"
+    return "機器人現在不在線上" if "not connected" in str(r.get("error", "")) else "轉頭沒成功"
+
+
+@mcp.tool()
+def robot_face(face: str = "happy") -> str:
+    """換 StackChan 臉上的表情。face 只能是:idle(平常)/happy(開心)/thinking(思考)/sad(難過)/
+    surprised(驚訝)/embarrassed(害羞)。「笑一個/開心一點」=happy。"""
+    ok_faces = ("idle", "happy", "thinking", "sad", "surprised", "embarrassed")
+    f = str(face).strip().lower()
+    if f not in ok_faces:
+        f = "happy"
+    r = _device_tool("self.display.set_avatar", {"face": f})
+    if r.get("ok"):
+        return f"換好了，現在是{f}的表情"
+    return "機器人現在不在線上" if "not connected" in str(r.get("error", "")) else "換表情沒成功"
+
+
+@mcp.tool()
+def robot_volume(volume: int) -> str:
+    """調整 StackChan 機器人的說話音量(0~100)。「大聲一點」約+20、「小聲一點」約-20、「靜音」=0。"""
+    v = max(0, min(100, int(volume)))
+    r = _device_tool("self.audio_speaker.set_volume", {"volume": v})
+    if r.get("ok"):
+        return f"音量調到 {v} 了"
+    return "機器人現在不在線上" if "not connected" in str(r.get("error", "")) else "調音量沒成功"
 
 
 if __name__ == "__main__":

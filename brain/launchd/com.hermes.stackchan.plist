@@ -8,11 +8,11 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/chenyouwei/Hermes_Brain/scripts/start_stackchan_gateway.sh</string>
+        <string>/Users/USERNAME/Hermes_Brain/scripts/start_stackchan_gateway.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/chenyouwei/Hermes_Brain</string>
+    <string>/Users/USERNAME/Hermes_Brain</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -24,9 +24,9 @@
     <integer>10</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/chenyouwei/Hermes_Brain/memory/logs/stackchan_gateway.log</string>
+    <string>/Users/USERNAME/Hermes_Brain/memory/logs/stackchan_gateway.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/chenyouwei/Hermes_Brain/memory/logs/stackchan_gateway.log</string>
+    <string>/Users/USERNAME/Hermes_Brain/memory/logs/stackchan_gateway.log</string>
 </dict>
 </plist>

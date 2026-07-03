@@ -3,10 +3,10 @@
 <plist version="1.0"><dict>
 <key>Label</key><string>com.hermes.memoryendpoint</string>
 <key>ProgramArguments</key><array>
-<string>/Users/chenyouwei/Hermes_Brain/.venv/bin/python</string><string>-u</string>
+<string>/Users/USERNAME/Hermes_Brain/.venv/bin/python</string><string>-u</string>
 <string>-m</string><string>scripts.hermes_memory_endpoint</string></array>
-<key>WorkingDirectory</key><string>/Users/chenyouwei/Hermes_Brain</string>
+<key>WorkingDirectory</key><string>/Users/USERNAME/Hermes_Brain</string>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
-<key>StandardOutPath</key><string>/Users/chenyouwei/Hermes_Brain/memory/logs/hermes_memory_endpoint.log</string>
-<key>StandardErrorPath</key><string>/Users/chenyouwei/Hermes_Brain/memory/logs/hermes_memory_endpoint.log</string>
+<key>StandardOutPath</key><string>/Users/USERNAME/Hermes_Brain/memory/logs/hermes_memory_endpoint.log</string>
+<key>StandardErrorPath</key><string>/Users/USERNAME/Hermes_Brain/memory/logs/hermes_memory_endpoint.log</string>
 </dict></plist>
