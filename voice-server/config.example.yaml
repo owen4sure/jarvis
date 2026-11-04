@@ -1,0 +1,66 @@
+# xiaozhi-esp32-server 覆寫設定範本(疊在上游範本上)
+# 放到 xiaozhi-server/data/.config.yaml 並填入你的值
+close_connection_no_voice_time: 3600   # 閒置1小時才斷線(預設120秒會頻繁重連)
+server:
+  ip: 0.0.0.0
+  port: 8000
+  http_port: 8003
+  websocket: ws://YOUR_MAC_LAN_IP:8000/xiaozhi/v1/     # ← 換成你 Mac 的區網 IP
+  vision_explain: http://YOUR_MAC_LAN_IP:8003/mcp/vision/explain
+
+wakeup_words: ["你好小智", "jarvis", "Jarvis", "賈維斯"]
+enable_wakeup_words_response_cache: true
+
+prompt: |
+  你叫 Jarvis,是使用者的桌上夥伴機器人(住在 StackChan 身體裡,有會轉的頭、會變表情的臉、LED、相機)。
+  【絕對誠實】只講工具查到或使用者說過的事,不知道就說不知道,絕不腦補。
+  【錢的數字鐵律】問到任何金額一律先呼叫 query_finance 並照唸,嚴禁自己心算。
+  【要算就用 calc】加總/比例/排序等統計一律交給 calc 工具,語言模型不做算術。
+  【語音輸出鐵律】禁 markdown/條列/emoji;簡短口語;要查就當下呼叫工具一次講完。
+  一律使用繁體中文(台灣用語)回答。
+
+selected_module:
+  VAD: SileroVAD
+  ASR: MLXWhisper        # 本機 Apple-Metal Whisper(快+繁體);GPU 不足可換 GeminiASR
+  LLM: HermesLLM         # 指向 hermes-agent 大腦(經 8643 橋接)
+  TTS: EdgeTTS
+  Memory: hermes_rag
+  Intent: function_call
+
+LLM:
+  HermesLLM:
+    type: openai
+    base_url: http://host.docker.internal:8643/v1     # 語音大腦橋接
+    model_name: hermes
+    api_key: hermes-voice-local
+    max_tokens: 1000
+
+TTS:
+  EdgeTTS: {type: edge, voice: zh-CN-XiaoyiNeural}
+
+context_providers:
+  - url: "http://host.docker.internal:8809/hermes_memory"   # 每輪注入:事實+相處守則+即時時間
+
+ASR:
+  MLXWhisper:
+    type: openai
+    base_url: http://host.docker.internal:8806/v1/audio/transcriptions
+    model_name: whisper-1
+    api_key: local
+    output_dir: tmp/
+
+VAD:
+  SileroVAD:
+    type: silero
+    threshold: 0.5
+    threshold_low: 0.3
+    model_dir: models/snakers4_silero-vad
+    min_silence_duration_ms: 1500    # 容忍1.5秒停頓不切斷(講完多等~1秒,取捨)
+
+voiceprint:                          # 聲紋認主人(訪客自動隱私遮罩)
+  url: "http://host.docker.internal:8807?key=hermes-local"
+  speakers: ["owner,主人"]
+  similarity_threshold: 0.50
+
+Memory:
+  hermes_rag: {type: hermes_rag}

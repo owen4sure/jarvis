@@ -1,0 +1,6 @@
+name: expense-fastpath
+version: 1.0.0
+description: "Records pure 'item+amount' messages (e.g. 午餐138) via the bookkeeping endpoint in <1s instead of the full agent loop. Owner-only, text-only, skips when a clarify prompt is pending. Lives as a plugin so it survives hermes updates."
+author: "Hermes (Owen)"
+hooks:
+  - pre_gateway_dispatch

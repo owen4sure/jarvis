@@ -1,0 +1,14 @@
+{
+  "income": [{"name": "薪水", "amount": 50000}],
+  "fixed": [{"name": "房租", "amount": 15000}, {"name": "電話費", "amount": 500}],
+  "cash": 200000,
+  "payday": 15,
+  "budget": {"save_goal": 8000, "spend_limit": 15000},
+  "holdings": [
+    {"id": 1, "symbol": "2330", "market": "TW", "name": "台積電", "shares": 100, "cost": 600.0},
+    {"id": 2, "symbol": "0050", "market": "TW", "name": "元大台灣50", "shares": 1000, "cost": 130.0},
+    {"id": 3, "symbol": "VOO", "market": "US", "name": "Vanguard S&P500", "shares": 5, "cost": 400.0}
+  ],
+  "goal": {"target": 10000000, "target_age": 40},
+  "fire_annual": 600000
+}

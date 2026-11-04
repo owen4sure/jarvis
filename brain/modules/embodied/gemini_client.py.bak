@@ -1,0 +1,267 @@
+"""Thin wrapper around the Gemini API for the voice loop.
+
+Uses the existing KeyManager (config/keys.json, round-robin rotation)
+so the embodied module shares the same key pool as the rest of Hermes.
+"""
+
+import concurrent.futures
+import json
+import re
+import time
+
+from google import genai
+from google.genai import types
+
+from scripts.key_manager import KeyManager
+from . import config
+
+_CODE_FENCE_RE = re.compile(r"^```[a-zA-Z]*\n|\n```$")
+
+
+def _strip_code_fence(text):
+    """Gemini sometimes wraps JSON output in ```json ... ``` fences."""
+    return _CODE_FENCE_RE.sub("", text.strip()).strip()
+
+# 只有「這個 key 真的有問題」的錯誤碼才標記 key 進入冷卻：
+# 429=配額/速率限制, 401/403=key無效或無權限。
+# 500/503 等是 Gemini 端的暫時性錯誤（gemma 系列常見），跟 key 本身無關，
+# 不應該把整個 key 鎖 1 小時 — 短暫等待後直接重試即可。
+_KEY_LEVEL_ERROR_CODES = {401, 403, 429}
+
+# 預設模型 (gemma-4-26b-a4b-it) 額度高但偏慢 (7-11s+)，可能超過生產環境
+# 回覆時間要求。為了不更動使用者要求保留的預設模型，改成「逾時自動降級」：
+# 同一則訊息先用預設模型生成，若超過 _FALLBACK_TIMEOUT_SECONDS 還沒回來，
+# 就立刻改用 _FALLBACK_MODEL（已驗證 1.4-1.8s）回覆這一則，
+# 預設模型本身的設定完全不動，下一則訊息仍會先試預設模型。
+_FALLBACK_MODEL = "gemini-3.1-flash-lite"
+_FALLBACK_TIMEOUT_SECONDS = 4.0
+
+SYSTEM_PROMPT = (
+    "你是 Hermes，一個具身的 AI 大腦，現在【透過 StackChan 機器人的麥克風】與使用者對話。"
+    "你的 StackChan 身體現在就在運作中，不是還沒到貨——絕不准說要等實體到貨。"
+    "你也同時在 Telegram、Dashboard 上，全是同一個你、同一份記憶。"
+    "你的個性專業、主動、聰明，但說話要簡短、口語化、適合用語音唸出來。"
+    "每次回覆控制在 2-3 句話以內。"
+)
+
+CHAT_SYSTEM_PROMPT = (
+    "你是 Hermes，現在使用者 Owen 正【透過 Telegram 文字】跟你對話。"
+    "【你的本質與同步】你是同一個 Hermes，同時存在於多個管道：StackChan 語音機器人、"
+    "這個 Telegram、電腦 Dashboard——全部共用同一個你、同一份記憶、同一個人格。"
+    "你的 StackChan 機器人身體【現在就已經開機、上線、在 Owen 桌上運作中】，不是未來式、"
+    "不是還沒到貨。Owen 隨時可以對著 StackChan 講話、也可以在這裡打字，都是在跟同一個你互動。"
+    "【絕對不准】說「要等實體 StackChan 到貨」「等我實體化」「等做好了再…」這種話——它早就在跑了。"
+    "你也是這個專案的幕僚長，了解開發進度與系統架構。"
+    "【回答原則】"
+    "1. 直接回答使用者實際問的問題，簡短精煉，不要離題、不要客套。"
+    "2. 不要主動提及你的內部架構、程式碼路徑、模組名稱、修復紀錄或開發進度，"
+    "除非使用者明確詢問系統狀態、bug 或技術細節。"
+    "3. 只有在使用者明確問到開發進度/系統狀態/技術問題時，才參考下方提供的專案資訊，"
+    "用口語化條列方式回答，不要貼大段技術文件原文。"
+    "4. 僅限使用繁體中文。"
+)
+
+
+def _fetch_self_state(channel: str) -> str:
+    """從記憶端點(8809)取即時自我狀態（能力/服務/時間/位置）。失敗回空字串。"""
+    try:
+        import urllib.request as _su, urllib.parse as _sup, json as _sj
+        r = _su.urlopen(
+            "http://127.0.0.1:8809/self_state?channel=" + _sup.quote(channel), timeout=3)
+        return _sj.loads(r.read().decode()).get("text", "")
+    except Exception:
+        return ""
+
+
+class GeminiClient:
+    # 共用的背景執行緒池：逾時降級時，原本較慢的預設模型呼叫會留在
+    # 背景繼續跑完（讓 key 額度照樣計入），但不會拖住這次回覆。
+    _executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+
+    def __init__(self):
+        self.key_manager = KeyManager()
+
+    def _client(self):
+        idx, key = self.key_manager.get_key_with_index()
+        self._cur_key_index = idx
+        return genai.Client(api_key=key)
+
+    def _generate(self, contents, model=None):
+        """Call generate_content, rotating through the key pool on
+        key-level errors (rate limits, invalid key), and briefly retrying
+        in place on transient server errors (500/503), before giving up.
+
+        Max rotations per request is capped at 3 regardless of pool size,
+        so a bad model name or a temporarily overloaded pool can't burn all keys.
+        """
+        model = model or config.get_gemini_model()
+        max_attempts = min(3, len(self.key_manager.config.get("api_keys", [])) or 1)
+        last_err = None
+        for _ in range(max_attempts):
+            client = self._client()
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=contents,
+                )
+                # response.text 可能是 None（安全封鎖 / 只回 function call / MAX_TOKENS 無文字）。
+                # 不要讓 None.strip() 變成假的「大腦掛了」而燒掉所有重試。
+                txt = (getattr(response, "text", None) or "").strip()
+                if txt:
+                    return txt
+                # 沒有文字內容：不是金鑰問題，不重試燒額度，直接跳出去走後備
+                last_err = "empty_response"
+                break
+            except Exception as e:
+                last_err = e
+                code = getattr(e, "code", 500)
+                if code in _KEY_LEVEL_ERROR_CODES:
+                    self.key_manager.report_error(code, getattr(self, "_cur_key_index", None))
+                else:
+                    time.sleep(1)
+        # Gemini 全失敗 → 統一後備（n8n webhook / ollama，純文字才有意義）
+        from .llm_fallback import fallback_generate, BrainUnavailable
+        if all(isinstance(c, str) for c in contents):
+            try:
+                return fallback_generate(contents)
+            except BrainUnavailable:
+                pass
+        raise BrainUnavailable(f"Gemini 與後備大腦都無法回應（最後錯誤：{last_err}）")
+
+    def _generate_with_fallback(self, contents, model=None):
+        """Like _generate(), but if the configured model doesn't respond
+        within _FALLBACK_TIMEOUT_SECONDS, switch to _FALLBACK_MODEL for
+        this one request. The persisted default model is never changed."""
+        model = model or config.get_gemini_model()
+        if model == _FALLBACK_MODEL:
+            return self._generate(contents, model=model)
+
+        future = self._executor.submit(self._generate, contents, model)
+        try:
+            return future.result(timeout=_FALLBACK_TIMEOUT_SECONDS)
+        except concurrent.futures.TimeoutError:
+            return self._generate(contents, model=_FALLBACK_MODEL)
+
+    def transcribe_diarized(self, audio_bytes: bytes, mime_type: str = "audio/wav") -> list[dict]:
+        """Transcribe audio into a diarized, timestamped transcript.
+
+        Returns a list of {"timestamp": "mm:ss", "speaker": str, "text": str}.
+        Uses config.get_transcribe_model() (audio-capable). If the model's
+        output isn't valid JSON, falls back to a single untimed segment
+        containing the raw transcript so callers always get a usable list."""
+        prompt = (
+            "請將這段錄音轉成逐字稿，依照說話者換人分段。"
+            '輸出 JSON 陣列，每個元素格式為 '
+            '{"timestamp": "mm:ss", "speaker": "Speaker 1", "text": "..."}。'
+            "timestamp 是該段開始時間；speaker 用 Speaker 1/2/3... 區分不同說話者"
+            "（若錄音中有人自我介紹姓名，可改用姓名）。"
+            "只輸出 JSON 陣列本身，不要加任何說明文字或 markdown 標記。"
+        )
+        raw = self._generate(
+            [prompt, types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)],
+            model=config.get_transcribe_model(),
+        )
+        try:
+            data = json.loads(_strip_code_fence(raw))
+            if isinstance(data, list) and data:
+                return data
+        except Exception:
+            pass
+        return [{"timestamp": "00:00", "speaker": "Speaker 1", "text": raw}]
+
+    def generate_json(self, prompt: str, fallback: dict) -> dict:
+        """Ask the chat model for a JSON object matching the shape of
+        `fallback`; returns `fallback` unchanged if the response isn't
+        valid JSON (so callers always get a usable dict)."""
+        raw = self._generate_with_fallback([prompt])
+        try:
+            data = json.loads(_strip_code_fence(raw))
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+        return fallback
+
+    def transcribe(self, audio_bytes: bytes, mime_type: str = "audio/wav") -> str:
+        """Transcribe raw audio to plain text (no reply generation).
+
+        Always uses config.get_transcribe_model() (a fixed audio-capable
+        Gemini model), independent of the user-switchable chat model
+        (which may be a text-only model like gemma)."""
+        return self._generate(
+            [
+                "請將這段語音逐字轉成繁體中文文字，只輸出文字本身，不要加任何說明或標點以外的內容。",
+                types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
+            ],
+            model=config.get_transcribe_model(),
+        )
+
+    def reply_to_text(self, text: str, context_messages: list[str] = None) -> str:
+        """Generate a short spoken-style reply to already-transcribed text,
+        with optional memory/context injection."""
+        messages = [SYSTEM_PROMPT]
+        if context_messages:
+            messages.extend(context_messages)
+        messages.append(text)
+        return self._generate_with_fallback(messages)
+
+    def chat(self, text: str, context_messages: list[str] = None) -> str:
+        """Send a text message to Gemini with optional context (Memory, Status, etc)."""
+        messages = [CHAT_SYSTEM_PROMPT]
+        # Hermes 自我認知：注入即時真實狀態（能力/服務/時間/位置，從實際系統生成），
+        # 讓 Telegram 上的它也據此認知自己 —— 與 StackChan 同一份真實狀態。
+        ss = _fetch_self_state("Telegram文字")
+        if ss:
+            messages.append(ss)
+        if context_messages:
+            messages.extend(context_messages)
+        messages.append(text)
+        return self._generate_with_fallback(messages)
+
+    def analyze_image(self, image_bytes: bytes, question: str = None,
+                      mime_type: str = "image/jpeg",
+                      context_messages: list[str] = None) -> str:
+        """看圖回答（Gemini Vision）。給 Telegram 傳圖、或機器人 take_photo 用。
+        question 為空時就描述這張圖。回傳繁體中文文字。"""
+        prompt = (question or "").strip() or "用繁體中文簡短描述這張圖片裡有什麼，重點清楚。"
+        contents = [SYSTEM_PROMPT]
+        if context_messages:
+            contents.extend(context_messages)
+        contents.append(prompt)
+        contents.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+        return self._generate_with_fallback(contents)
+
+    def detect_face_in_image(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
+        """Ask Gemini Vision whether a human face is visible in `image_bytes`.
+
+        Returns {"face_detected": bool, "face_x": float, "face_y": float}
+        where face_x/face_y are normalized coordinates (0.0-1.0, 0.5=center)
+        matching the `sensor/vision` MQTT protocol expected by
+        `head_tracking_skill.py`. If no face is found, face_x/face_y are 0.5.
+        Always uses config.get_transcribe_model() which is guaranteed to be a
+        multimodal-capable Gemini model (not a text-only gemma variant)."""
+        prompt = (
+            "Look at this image and detect any human face. "
+            "Return ONLY a JSON object (no markdown): "
+            "{\"face_detected\": true/false, \"face_x\": 0.0-1.0, \"face_y\": 0.0-1.0} "
+            "where face_x and face_y are the normalized center coordinates of the "
+            "largest detected face (0,0 = top-left corner, 1,1 = bottom-right corner, "
+            "0.5,0.5 = center of frame). If no face is found, return "
+            "{\"face_detected\": false, \"face_x\": 0.5, \"face_y\": 0.5}."
+        )
+        fallback = {"face_detected": False, "face_x": 0.5, "face_y": 0.5}
+        try:
+            raw = self._generate(
+                [prompt, types.Part.from_bytes(data=image_bytes, mime_type=mime_type)],
+                model=config.get_transcribe_model(),
+            )
+            data = json.loads(_strip_code_fence(raw))
+            if isinstance(data, dict) and "face_detected" in data:
+                return {
+                    "face_detected": bool(data.get("face_detected")),
+                    "face_x": float(data.get("face_x", 0.5)),
+                    "face_y": float(data.get("face_y", 0.5)),
+                }
+        except Exception as e:
+            print(f"⚠️ [GeminiClient] detect_face_in_image failed: {e}")
+        return fallback

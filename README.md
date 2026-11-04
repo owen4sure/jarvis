@@ -1,0 +1,194 @@
+<div align="center">
+
+# 🤖 J.A.R.V.I.S
+
+### Your one-of-a-kind personal AI super-assistant — embodied, ever-present, self-evolving.
+
+**One brain, three bodies:** a desktop robot (voice) × Telegram × an Iron-Man-style command center — sharing a single memory, a single personality, and a single set of tools.
+
+![Dashboard](docs/screenshots/dashboard.gif)
+
+[繁體中文](README.zh-TW.md) · [Deploy](docs/DEPLOY.md) · [Extend](docs/EXTENDING.md)
+
+*(All screenshots use demo data)*
+
+</div>
+
+---
+
+## Why build this
+
+Off-the-shelf assistants are built for everyone — which means they belong to no one. Jarvis is the opposite: **a super-assistant engineered around exactly one person.** It knows your finances to the dollar, your habits, your goals, and how you like to be spoken to — and it gets measurably better at all of it every single night, on its own.
+
+Three engineering principles make that possible:
+
+1. **Numbers are computed, never generated.** Every financial answer comes from a deterministic calculation layer — the LLM only reads results aloud.
+2. **One brain everywhere.** Voice, Telegram and the dashboard hit the same agent runtime, the same tools, the same memory. Tell it something once, it knows it everywhere, instantly.
+3. **It evolves without being watched.** Nightly jobs review the day's conversations to refine its personality and to build the capabilities it discovered it was missing.
+
+## A day with Jarvis
+
+- **07:30** — Morning briefing on your Telegram: weather, agenda, overnight US-market results for *your* holdings
+- **All day** — You talk to the robot on your desk: log expenses, query any slice of your finances, set reminders, manage todos, draft emails (sent only after your confirmation), ask it to research anything, or tell it to *build itself a new feature*
+- **Market hours** — It watches your portfolio and speaks up on significant moves; after each close (TW & US) it pushes a full P&L report
+- **Anytime, anywhere** — Same brain on Telegram when you're out; the JARVIS command center visualizes everything at home
+- **03:00** — It reads the whole day's conversations, distills new rules about how to serve you better, writes them into its own personality, then audits its capability gaps and builds the most valuable missing feature — with automatic backup, smoke-testing and rollback
+- **07:30 next day** — A slightly better Jarvis wakes up with you
+
+## Capabilities
+
+| Domain | What it does |
+|---|---|
+| 💰 **Personal finance** | Full income/expense/budget tracking · real-time TW & US portfolio (returns, daily P&L, per-holding) · net-worth trend (daily/weekly/monthly) · goal-gap and compound-interest projections · per-category analytics · voice bookkeeping with a deterministic capture net |
+| 🗣️ **Voice companion** | Wake-word ("Jarvis"), continuous conversation, interruption · local Whisper ASR on Apple Metal (~1s, Traditional Chinese) · voiceprint owner recognition · facial expressions & head motion synced to emotion |
+| 🧠 **Memory** | Hybrid vector + keyword retrieval · deterministic fact extraction from every conversation · profile always injected into context · dashboard editing with instant sync |
+| 📱 **Telegram** | Full-capability chat (same brain as voice) · morning briefing · TW/US market-close P&L reports · intraday holding alerts · budget-pace & payday pushes · stock/crypto/earthquake/typhoon/flight watchers · remote task dispatch & build approvals |
+| 📬 **Email** | Drafting with contact lookup · professional tone templates · human-confirmed sending · outbox with inline editing on the dashboard |
+| 🛠️ **Self-extension** | One sentence → full-stack feature (backend API + voice tool + dashboard panel), auto-deployed behind safety gates · nightly capability proposals |
+| 🖥️ **Command center** | Iron-Man HUD · finance & portfolio visualizations (multi-ring allocation charts, interactive trends) · memory/chat/evolution/mail consoles · service health & model switching |
+| 🔒 **Privacy** | Voiceprint-gated identity · automatic financial masking for guests · everything runs on your own machine |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Device["🤖 StackChan (ESP32-S3)"]
+        MIC[mic · speaker · face · servos]
+    end
+    subgraph Mac["🖥️ Mac — resident services"]
+        XZ[xiaozhi voice server<br/>Docker :8000] --> BR[voice bridge :8643]
+        BR --> AG["⭐ hermes-agent :8642<br/>agent loop · gateway · MCP client"]
+        AG --> PX[LLM key-rotation proxy :8808]
+        AG --> LIFE[hermes-life MCP :8769<br/>40+ life tools]
+        LIFE --> MEM[memory & finance core :8809<br/>deterministic answer layer]
+        DASH[JARVIS dashboard :8811] --> MEM
+        XZ --> ASR[MLX Whisper :8806]
+        XZ --> VP[voiceprint :8807]
+        TG[Telegram] --> AG
+        CRON[nightly self-evolution] --> MEM
+    end
+    MIC <--WebSocket--> XZ
+    PX --> LLM[(Gemini / any OpenAI-compatible model)]
+```
+
+### ⭐ The brain: hermes-agent
+
+The heart of the system is **hermes-agent** — a self-hosted agent runtime that acts as the *single* brain for every channel:
+
+- **Multi-platform gateway**: one process serves Telegram, the voice bridge and an OpenAI-compatible API — so every channel is literally the same agent, not a synced copy
+- **Server-side agent loop**: multi-step reasoning with parallel tool execution and iteration budgeting
+- **MCP-native tooling**: capabilities are registered once as MCP tools (hermes-life for life/finance, stackchan for the robot body) and every channel gains them simultaneously
+- **Live context injection**: personal facts, self-learned interaction rules (SOUL) and real-time state are injected fresh on every turn
+- **Skills & self-awareness**: an extensible skill hub plus a generated-per-turn self-state so the agent always knows what it can currently do
+
+### 🤖 The body: StackChan integration
+
+The physical presence is a [StackChan](https://github.com/meganetaaan/stack-chan) robot on M5Stack CoreS3 (ESP32-S3), integrated end-to-end:
+
+- **On-device wake word** ("Jarvis") with instant head-raise acknowledgment
+- **WebSocket audio streaming** to the xiaozhi voice server (Opus, 16 kHz), with automatic audio-desync self-healing on reconnect
+- **Continuous conversation**: after each reply it keeps listening — no re-wake needed; you can interrupt mid-sentence
+- **Voiceprint identity** at the ASR layer: the robot knows *who* is speaking; guests are automatically privacy-masked
+- **Embodied emotion**: the LLM picks an emotion each turn; face and head motion follow
+- **Proactive voice**: reminders and alerts make the robot speak up on its own via a server-side voice queue
+
+### 📱 The pocket: Telegram integration
+
+When you leave the house, Jarvis doesn't hand you off to a dumber sibling — **Telegram is served by the exact same agent process**, with the full toolset and the full memory. It is the away-from-home body:
+
+- **Everything by chat** — finance queries, bookkeeping, reminders, todos, memory, email drafting, web research, computed analytics: identical capabilities to voice, because it *is* the same brain
+- **Proactive intelligence, pushed** — morning briefing at 07:30 · full P&L reports after every TW & US market close · intraday alerts on significant moves in your holdings · budget-pace warnings before you overspend · payday investment reminders
+- **Watchers** — subscribe to stocks, crypto, earthquakes, typhoons, flights and late-night check-ins; Jarvis messages you the moment something matters
+- **Mission control on the go** — dispatch long-running research tasks and get results delivered when done · receive "feature built & deployed" reports · approve the nightly capability proposals with a reply
+- **Perfect continuity** — mention something on Telegram at lunch, and the robot on your desk already knows it when you get home
+
+## The command center
+
+Interactive portfolio analytics — net-worth trend with selectable granularity and goal progress, multi-select nested allocation rings (market / leverage / per-holding), hover details on every slice:
+
+![Invest](docs/screenshots/invest.gif)
+
+| Home HUD | Bookkeeping |
+|---|---|
+| ![home](docs/screenshots/home.png) | ![money](docs/screenshots/money.png) |
+
+## 🧬 Self-evolution — it gets better while you sleep
+
+Jarvis runs a **dual-track nightly evolution pipeline** over the day's full conversation log:
+
+**Track 1 · Personality (`self_reflect`, 03:00)**
+Reads every exchange of the day and distills concise *interaction rules* — how you like answers delivered, what annoys you, what you care about. Rules are deduplicated, capped, written into the agent's SOUL, and **injected into every turn from the next morning on**. The assistant literally wakes up knowing how to treat you better.
+
+**Track 2 · Capability (`self_review`, 03:15)**
+Audits the same log for capability gaps — questions it couldn't answer, tasks it couldn't do, moments you had to repeat yourself. It converts each gap into an engineering proposal, **autonomously builds the highest-value one overnight**, and reports the rest to your Telegram for one-tap approval.
+
+**The safety architecture that makes autonomy trustworthy:**
+1. Snapshot backups of every critical file before any self-modification
+2. Full-stack build by an embedded coding agent (backend + voice tool + dashboard panel)
+3. Smoke tests on everything it touched (Python AST · YAML · HTML integrity)
+4. Automatic rollback on failure — plus a **self-repair loop** that feeds the exact error back for another attempt
+5. Auto-redeploy on success: the new capability is live before you wake up
+
+Both tracks use cursor-based incremental processing — every conversation is reviewed exactly once, across voice and Telegram alike.
+
+## 🧠 Memory — remembers like a person, retrieves like a database
+
+Memory is engineered in layers, so knowing you never depends on a model "remembering to remember":
+
+- **Canonical fact store** — every durable fact lives in one embedded store, the single source of truth shared by all channels
+- **Always-injected profile** — core facts about you ride along in *every single turn's* context; who you are is never left to retrieval luck
+- **Hybrid recall** — keyword matching (Chinese-optimized sliding window) fused with local semantic embeddings for everything beyond the core
+- **Deterministic scribe** — an independent watcher scans the conversation log every few minutes and extracts durable facts under a strict *"under-record rather than hallucinate"* policy — capture never depends on the model calling a tool
+- **Self-learned SOUL** — personality plus the interaction rules learned by nightly reflection, versioned and editable
+- **Two-way profile sync** — the agent's own user profile and the fact store reconcile bidirectionally, with snapshot-based deletion protection (a deleted memory can never resurrect) and a semantic-similarity gate that blocks paraphrased duplicates
+- **Time-aware memories** — event-bound facts carry expiry dates and self-purge once obsolete
+- **Per-person memory** — the robot keeps separate profiles for people it meets by voiceprint, with automatic privacy masking for anyone who isn't you
+- **Live editing** — every memory is visible and editable in the dashboard, with changes reflected in the very next turn
+- **100% local** — embeddings are computed on-device; your memory never leaves your machine
+
+## 💼 Job Radar — upload your resume, get AI-picked jobs daily
+
+![Job Radar](docs/screenshots/jobs.png)
+
+Not keyword matching — it **reads your resume, then scores every posting against *you***.
+
+- **Upload a resume (PDF)** → an LLM builds your matching profile and search keywords. Swap the resume to use it for anyone.
+- **Daily auto-scan** (12:35) of Yourator + LinkedIn; the LLM scores each job **0–100 with a one-line reason**, and pushes newly-appeared high-fit jobs to Telegram.
+- **English postings get a Chinese translation** — title and full JD, fetched and translated on demand.
+- **Custom hard preferences** in plain words ("remote-first, 70k+, AI implementation, no finance") become the top-priority matching standard.
+- **Dislike with ✕** — the job disappears and becomes a negative signal, so matches sharpen over time.
+- **☆ Save** to a persistent shortlist; **🔬 Deep-dive** actually researches company reputation, salary range, JD-vs-your-resume gap + how to close it, and interview prep — cached for re-reading.
+- **📨 One-click LinkedIn apply** — opens a visible window, auto Easy-Apply + resume upload, and stops on any field it's unsure about so you finish it by hand (better to under-click than mis-submit).
+- **Conversational** — say "any new jobs?", "details on that Google role", "follow it", "research it" over Telegram/voice; same tools everywhere.
+
+> A generic version (anyone uploads a resume to find jobs) is open-sourced separately at [owen4sure/job-radar](https://github.com/owen4sure/job-radar).
+
+## Correctness engineering
+
+- **Deterministic answer layer** — high-frequency money questions are answered by Python computation that produces the *complete sentence*; the model recites it verbatim
+- **Semantic normalization** — when a phrasing doesn't match, a lightweight LLM pass rewrites it into canonical form (preserving entities, converting Chinese numerals) before hitting the deterministic layer — so *any* way of asking lands on the computed answer
+- **Deterministic capture nets** — bookkeeping and memory extraction run as independent watchers over the conversation log, so nothing depends on the model remembering to call a tool
+- **Safety-gated self-modification** — every autonomous code change is preceded by backups and followed by smoke tests (AST / YAML / HTML integrity) with automatic rollback and a self-repair loop
+
+## Quick start
+
+```bash
+git clone https://github.com/owen4sure/jarvis && cd jarvis
+python3 -m venv .venv && .venv/bin/pip install -r brain/requirements-embodied.txt
+cp .env.example .env                                              # your LLM keys
+cp brain/config/finance.example.json brain/config/finance.json    # your numbers
+cp brain/config/telegram.example.json brain/config/telegram.json
+cp brain/launchd/*.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.hermes.*.plist
+open http://localhost:8811
+```
+
+Full guide (all 9 services, the robot, the brain): **[docs/DEPLOY.md](docs/DEPLOY.md)**
+
+## Extending Jarvis
+
+Three ways, from zero-code to full control — including simply *telling Jarvis to build it*:
+**[docs/EXTENDING.md](docs/EXTENDING.md)**
+
+## License
+
+MIT — build your own Jarvis.

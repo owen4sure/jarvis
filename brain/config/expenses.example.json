@@ -1,0 +1,5 @@
+{"expenses": [
+  {"amount": 120, "category": "餐飲", "note": "午餐", "date": "2026-07-01"},
+  {"amount": 60,  "category": "餐飲", "note": "咖啡", "date": "2026-07-01"},
+  {"amount": 1200,"category": "購物", "note": "日用品", "date": "2026-06-28"}
+]}

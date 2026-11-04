@@ -1,0 +1,5 @@
+{
+  "channel_access_token": "your-line-messaging-api-channel-access-token",
+  "channel_secret": "your-line-messaging-api-channel-secret",
+  "forward_to_telegram_chat_id": 123456789
+}
